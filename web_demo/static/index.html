@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Workflow DSL Compiler</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <h1>AI Workflow DSL Compiler</h1>
+      <p>Industry-style AI pipeline DSL lowered into a full compiler pipeline with an agentic debugging layer</p>
+    </div>
+    <div class="hero-actions">
+      <button id="loadSampleBtn">Load AI Sample</button>
+      <button id="loadRealBtn" class="secondary">Load Real Training Demo</button>
+      <button id="loadErrorBtn" class="secondary">Load AI Error Sample</button>
+      <button id="compileBtn" class="accent">Compile</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="editor-card">
+      <div class="section-head runtime-head"><div><h2>Source Editor</h2></div></div>
+      <div class="section-head">
+        <h2>Compiler Input</h2>
+        <label>
+          Program name
+          <input id="programName" value="web_input" />
+        </label>
+      </div>
+      <textarea id="sourceEditor" spellcheck="false"></textarea>
+      <div class="section-head">
+        <h2>Runtime input</h2>
+        <label>
+          Optional numbers for read(...) or prediction demos
+          <input id="runtimeInput" placeholder="Example: 5 10 15" />
+        </label>
+      </div>
+      <div class="section-head agent-controls">
+        <h2>Agent mode</h2>
+        <label>
+          Backend
+          <select id="agentBackend">
+            <option value="deterministic">Deterministic agent</option>
+            <option value="llm">Deterministic + optional LLM</option>
+            <option value="langgraph">LangGraph orchestration</option>
+            <option value="langgraph-llm">LangGraph + optional LLM</option>
+            <option value="auto">Auto best available</option>
+          </select>
+        </label>
+        <label>
+          LLM provider
+          <select id="llmProvider">
+            <option value="">None / env default</option>
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Gemini</option>
+          </select>
+        </label>
+        <label>
+          Model
+          <input id="llmModel" placeholder="Optional, e.g. gpt-4o-mini" />
+        </label>
+      </div>
+      <div id="statusBar" class="status">Ready.</div>
+    </section>
+
+    <section class="summary-grid">
+      <article class="metric"><span id="successValue">—</span><label>Build status</label></article>
+      <article class="metric"><span id="tokenCount">0</span><label>Tokens</label></article>
+      <article class="metric"><span id="errorCount">0</span><label>Total errors</label></article>
+      <article class="metric"><span id="tacCount">0</span><label>TAC lines</label></article>
+    </section>
+
+    <section class="tabs-card">
+      <div class="tabs" id="tabs"></div>
+      <pre class="panel active" data-panel="output" id="outputPanel"></pre>
+      <pre class="panel" data-panel="listing" id="listingPanel"></pre>
+      <pre class="panel" data-panel="tokens" id="tokensPanel"></pre>
+      <pre class="panel" data-panel="ast" id="astPanel"></pre>
+      <pre class="panel" data-panel="tac" id="tacPanel"></pre>
+      <pre class="panel" data-panel="asm" id="asmPanel"></pre>
+      <pre class="panel" data-panel="errors" id="errorsPanel"></pre>
+      <pre class="panel" data-panel="translated" id="translatedPanel"></pre>
+      <pre class="panel" data-panel="agent" id="agentPanel"></pre>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

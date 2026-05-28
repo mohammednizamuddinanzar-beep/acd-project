@@ -1,0 +1,6 @@
+# Optional AI-agent orchestration layer
+# Install only when you want real LangGraph / LLM execution.
+langgraph>=0.2.0
+langchain>=0.2.0
+langchain-openai>=0.1.0
+langchain-google-genai>=1.0.0

@@ -1,0 +1,17 @@
+.git/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.*
+output/
+artifacts/
+*.zip
+.DS_Store
+.idea/
+.vscode/
+.pytest_cache/
+.mypy_cache/
