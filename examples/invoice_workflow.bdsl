@@ -1,0 +1,14 @@
+WORKFLOW InvoiceProcessing {
+
+    ON email.received
+
+    EXTRACT amount FROM email
+
+    IF amount > 50000 {
+
+        NOTIFY finance
+
+    }
+
+    SAVE invoice TO database
+}

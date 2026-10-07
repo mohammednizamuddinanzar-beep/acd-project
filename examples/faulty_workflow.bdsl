@@ -1,0 +1,20 @@
+WORKFLOW BrokenApproval {
+    ON email.received
+    EXTRACT amount FROM email
+
+    # Error 1: using undefined variable 'unapproved_budget'
+    IF unapproved_budget > 10000 {
+        NOTIFY finance
+    }
+
+    # Error 2: DISPATCH is not a valid workflow action
+    DISPATCH alert TO team
+
+    # Error 3: Unreachable branch (always false)
+    IF 0 > 100 {
+        LOG 'this step is never reached'
+    }
+
+    SET status = 'approved'
+    SAVE email TO database
+}

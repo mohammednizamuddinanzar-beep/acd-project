@@ -1,0 +1,9 @@
+WORKFLOW OrderFulfillment {
+    ON order.created
+    EXTRACT total FROM order
+    SET discount = 500
+    IF total > 5000 {
+        NOTIFY customer
+    }
+    SAVE order TO database
+}

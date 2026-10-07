@@ -41,20 +41,22 @@ class TACInstr:
             return f"    RETURN  {self.arg1 or ''}"
         if self.op == 'HALT':
             return f"    HALT"
+        res_str = self.result or ''
         if self.arg2:
-            return f"    {self.result:<12} = {self.arg1}  {self.op}  {self.arg2}"
+            return f"    {res_str:<12} = {self.arg1}  {self.op}  {self.arg2}"
         if self.arg1:
             if self.op == 'COPY':
-                return f"    {self.result:<12} = {self.arg1}"
+                return f"    {res_str:<12} = {self.arg1}"
             if self.op == 'NEG':
-                return f"    {self.result:<12} = - {self.arg1}"
+                return f"    {res_str:<12} = - {self.arg1}"
             if self.op == 'NOT':
-                return f"    {self.result:<12} = NOT {self.arg1}"
+                return f"    {res_str:<12} = NOT {self.arg1}"
             if self.op == 'ARRAY_LOAD':
-                return f"    {self.result:<12} = {self.arg1}[{self.arg2}]"
+                return f"    {res_str:<12} = {self.arg1}[{self.arg2}]"
             if self.op == 'ARRAY_STORE':
-                return f"    {self.result}[{self.arg1}] = {self.arg2}"
+                return f"    {res_str}[{self.arg1}] = {self.arg2}"
         return f"    {self.op} {self.result} {self.arg1} {self.arg2}"
+
 
 
 # ──────────────────────────────────────────────────────────

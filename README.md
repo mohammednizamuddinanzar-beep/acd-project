@@ -1,998 +1,407 @@
-# AI Workflow DSL Compiler — LangGraph Agentic Debugging Engine
+# Business Automation Workflow DSL Compiler
+### Formal 5-Phase Compiler · Workflow Virtual Machine · Mock Integrations · Interactive Web IDE · Agentic Debugger
 
-A production-style AI workflow compiler that converts high-level machine learning pipeline DSL code into validated compiler artifacts, executes supported ML workflows, and uses a LangGraph-based agent layer to diagnose errors, explain failures, suggest fixes, and generate developer-friendly debugging reports.
+[![Build Status](https://img.shields.io/badge/tests-149%20passed-brightgreen.svg)](#test-suite--verification)
+[![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](#license)
 
-## What is this project?
+A domain-specific compiler and execution platform designed for **Business Automation Workflows** (invoice routing, order fulfillment, customer support escalation, approval hierarchies). The system bridges classical formal compiler construction principles with modern runtime simulation, virtual machines, mock service integrations, an interactive Web IDE, and an AI agentic debugging engine.
 
-This project is an AI-agent-enhanced compiler for machine learning workflow automation.
+---
 
-In simple words:
+## 📑 Table of Contents
 
-Imagine a data scientist or ML engineer wants to define an ML pipeline using simple commands such as:
+- [Executive Summary](#executive-summary)
+- [Architectural Pipeline](#architectural-pipeline)
+- [Language Specification](#language-specification)
+- [Key Features](#key-features)
+- [Project Directory Structure](#project-directory-structure)
+- [Getting Started](#getting-started)
+- [Usage Guide](#usage-guide)
+  - [Interactive Web IDE](#1-interactive-web-ide)
+  - [Command-Line Interface (CLI)](#2-command-line-interface-cli)
+  - [Natural Language to DSL Translation](#3-natural-language-to-dsl-ai-front-end)
+  - [Agentic Debugger](#4-agentic-debugger)
+  - [Repository Cleanup](#5-safe-project-cleanup)
+- [Curated Workflow Examples](#curated-workflow-examples)
+- [Virtual Machine & Mock Integrations](#virtual-machine--mock-integrations)
+- [Test Suite & Verification](#test-suite--verification)
+- [Performance Benchmarks](#performance-benchmarks)
 
-- Load a dataset
-- Define a model
-- Set training parameters
-- Train the model
-- Evaluate the model
-- Run prediction
-- Deploy the model
-- Monitor the model
-- Log execution status
+---
 
-Normally, this requires writing scattered Python scripts, validation code, training code, configuration files, and debugging logic.
+## Executive Summary
 
-This project solves that by creating a custom AI Workflow DSL.
+Traditional business process automation often relies on bulky low-code drag-and-drop tools or ad-hoc scripts that lack formal syntax validation, type safety, and static analysis. 
 
-A user can write:
+This project implements a **formal Domain-Specific Language (DSL)** compiler for business workflows that provides:
+1. **Compile-time validation**: Lexical, syntactic, and static semantic checks catch undefined fields, type mismatches, duplicate declarations, and missing trigger events before execution.
+2. **Deterministic execution**: A dedicated **Workflow Virtual Machine (VM)** executes Three-Address Code (TAC/IR) with step-by-step tracing, simulated time, and mock enterprise integrations (databases, email notifications, ERP APIs).
+3. **Execution Gate**: Faulty workflows are blocked at compile time and never reach the VM.
+4. **Agentic Debugging Engine**: Diagnoses compilation and runtime issues, providing human-readable root cause explanations and suggested DSL patches.
+5. **Interactive Web IDE**: A responsive visual workspace featuring live compiler tab inspection (Tokens, AST, Semantic Errors, TAC Quadruples, CFG, Assembly, VM Trace, Mock Services).
 
-```text
-PIPELINE CustomerChurnOps
-DATASET customers FROM 's3://ml-bucket/customer_churn.csv'
-MODEL churn_model TASK 'classification'
-SET batch_size = 64
-SET learning_rate = 1
-TRAIN churn_model ON customers EPOCHS 12
-EVALUATE churn_model
-PREDICT churn_model INPUT 25 INTO churn_score
-DEPLOY churn_model TO 'staging'
-MONITOR churn_model
-LOG 'Pipeline executed successfully'
-ENDPIPELINE
+---
+
+## Architectural Pipeline
+
+```
+       Source DSL (.workflow / .bdsl)
+                     ↓
+       [PHASE 1] LEXICAL ANALYSIS (lexer.py)
+                     ↓ Token Stream
+       [PHASE 2] SYNTAX ANALYSIS (parser.py)
+                     ↓ Abstract Syntax Tree (AST)
+       [PHASE 3a] SEMANTIC ANALYSIS & TYPE SYSTEM (business_semantics.py)
+                     ↓ Validated Scoped AST
+       [PHASE 3b] INTERMEDIATE CODE GENERATION (icg.py)
+                     ↓ Linear Three-Address Code (TAC)
+       [PHASE 3c] IR OPTIMIZATION (ir_optimizer.py)
+                     ↓ Optimized TAC Quadruples
+       [PHASE 4] TARGET CODE GENERATION (codegen.py)
+                     ↓ Educational x86-like Pseudo-Assembly (.asm)
+                     ↓
+               EXECUTION GATE (Pass/Fail)
+              ↙                          ↘
+     [FAIL: BLOCKED]               [PASS: APPROVED]
+            ↓                              ↓
+  Agentic Debugger            [PHASE 5] WORKFLOW VM (workflow_vm.py)
+  - Root-cause analysis       - Step-by-step trace & simulated time
+  - Error explanation         - Mock Services (Database, Notifications, API)
+  - Suggested fixes           - Runtime environment state
 ```
 
-The compiler processes this program and produces:
+---
 
-- Tokens
-- AST
-- Semantic validation
-- Intermediate representation
-- Three-Address Code
-- Pseudo-assembly
-- Runtime output
-- AI Agent Report
-- Error explanation
-- Suggested fixes
+## Language Specification
 
-The project combines classical compiler engineering with modern AI agent orchestration.
+The Business Automation Workflow DSL provides clean, declarative primitives for describing business processes:
 
-## Why this project matters
+| Keyword / Construct | Purpose | Example |
+|---|---|---|
+| `WORKFLOW <Name> { ... }` | Declares a business process scope | `WORKFLOW InvoiceProcessing { ... }` |
+| `ON <domain>.<event>` | Defines the event trigger | `ON email.received`, `ON order.created` |
+| `EXTRACT <var> FROM <src>` | Ingests payload fields into workflow state | `EXTRACT amount FROM email` |
+| `VALIDATE <entity>` | Asserts entity schema integrity | `VALIDATE order` |
+| `SET <var> [: TYPE] = <expr>` | Declares a typed local variable | `SET status : STRING = 'pending'` |
+| `IF <cond> { ... } ELSE { ... }`| Conditional decision branching | `IF amount > 50000 { NOTIFY finance }` |
+| `CALL <service>` | Invokes a third-party service/API | `CALL notify_erp`, `CALL process_payment` |
+| `NOTIFY <recipient>` | Dispatches auditable notifications | `NOTIFY finance`, `NOTIFY manager` |
+| `SAVE <entity> TO <target>` | Persists workflow entity to database/storage | `SAVE invoice TO database` |
+| `RETRY <count> { ... }` | Fault-tolerant retry block | `RETRY 3 { CALL charge_card }` |
+| `WAIT <duration>` | Simulates time delays | `WAIT 10s` |
+| `LOG '<message>'` | Emits workflow audit logs | `LOG 'Order completed'` |
 
-Modern ML pipelines are difficult to manage because they involve many moving parts:
+---
 
-- Dataset loading
-- Model configuration
-- Training order
-- Evaluation logic
-- Prediction handling
-- Deployment readiness
-- Monitoring requirements
-- Runtime failures
-- Debugging across multiple files
+## Key Features
 
-A normal compiler only gives a syntax or semantic error.
+- **Formal 5-Phase Compiler Architecture**: Complete separation of concerns from tokenization to target assembly emission.
+- **Static Type Safety**: Type checking for numeric comparisons (`amount > 50000`), string equality (`priority == 'HIGH'`), and assignment validations.
+- **Symbol Table & Lexical Scoping**: Tracks variable lifetimes, prevents duplicates, and prevents use-before-definition.
+- **Linear TAC & IR Optimizer**: Emits clean Three-Address Code with dead code elimination, constant folding, and condition simplification.
+- **Workflow Virtual Machine**: In-memory bytecode execution engine with simulated timestamping, step tracing, and deterministic outcomes.
+- **Mock Service Architecture**: In-memory mock drivers for transactional databases, customer email notifications, and external APIs.
+- **Interactive Multi-View Web IDE**: Features 12 inspector panels including Control Flow Graph (CFG) rendering, VM trace inspector, mock service monitor, token viewer, and AST visualizer.
+- **AI Agentic Debugger**: Multi-dimensional diagnostic engine providing root-cause analysis, line references, and auto-generated DSL patches.
+- **Natural Language Front-End**: Converts plain English descriptions into valid Business Workflow DSL.
 
-This project goes further.
+---
 
-It uses an AI agent layer to understand the compiler state and explain what went wrong in a human-readable way.
-
-The goal is not to replace the compiler.
-
-The compiler remains deterministic.
-
-The agent works as an intelligent debugging assistant around the compiler.
-
-This makes the system closer to real AI developer tooling used in production engineering environments.
-
-## Core idea
+## Project Directory Structure
 
 ```text
-AI Workflow DSL Code
-        ↓
-Lexer
-        ↓
-Parser
-        ↓
-Semantic Analyzer
-        ↓
-IR / TAC Generator
-        ↓
-Pseudo Assembly Generator
-        ↓
-Runtime Executor
-        ↓
-LangGraph Agentic Debugger
-        ↓
-AI Agent Report
-```
-
-The compiler handles the deterministic transformation of source code.
-
-The agent handles explanation, diagnosis, workflow validation, and fix suggestions.
-
-## Architecture
-
-```text
-                         [ User DSL Program ]
-                                  │
-                                  ▼
-                         [ CLI / Web IDE ]
-                                  │
-                                  ▼
- ┌──────────────────────────────────────────────────────────────┐
- │                     Compiler Core                            │
- │                                                              │
- │  ┌──────────────┐                                            │
- │  │ Lexer        │  Converts source code into tokens           │
- │  └──────┬───────┘                                            │
- │         ▼                                                    │
- │  ┌──────────────┐                                            │
- │  │ Parser       │  Builds AST from token stream               │
- │  └──────┬───────┘                                            │
- │         ▼                                                    │
- │  ┌─────────────────────┐                                     │
- │  │ Semantic Analyzer   │  Validates symbols and workflow use  │
- │  └──────┬──────────────┘                                     │
- │         ▼                                                    │
- │  ┌─────────────────────┐                                     │
- │  │ IR / TAC Generator  │  Produces intermediate code          │
- │  └──────┬──────────────┘                                     │
- │         ▼                                                    │
- │  ┌─────────────────────┐                                     │
- │  │ Code Generator      │  Produces pseudo-assembly output     │
- │  └──────┬──────────────┘                                     │
- │         ▼                                                    │
- │  ┌─────────────────────┐                                     │
- │  │ Runtime Executor    │  Executes supported AI workflows      │
- │  └─────────────────────┘                                     │
- └──────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
- ┌──────────────────────────────────────────────────────────────┐
- │                 Agentic Debugging Layer                      │
- │                                                              │
- │  observe                                                     │
- │     ↓                                                        │
- │  deterministic_diagnose                                      │
- │     ↓                                                        │
- │  optional_llm_review                                         │
- │     ↓                                                        │
- │  synthesize                                                  │
- │                                                              │
- └──────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-                         [ AI Agent Report ]
-```
-
-## How LangGraph is used
-
-LangGraph is used as the orchestration layer for the AI debugging workflow.
-
-It does not replace the compiler.
-
-It controls the agent reasoning steps after the compiler produces output or errors.
-
-The LangGraph flow is:
-
-```text
-observe → deterministic_diagnose → optional_llm_review → synthesize
-```
-
-### 1. observe
-
-The observe node collects compiler context.
-
-It receives:
-
-- Source code
-- Tokens
-- AST summary
-- TAC output
-- Assembly output
-- Runtime output
-- Syntax errors
-- Semantic errors
-- Runtime errors
-- Failed line number
-- Failed source line
-- Selected agent backend
-
-Purpose:
-
-```text
-Understand what happened during compilation.
-```
-
-### 2. deterministic_diagnose
-
-This node runs the local rule-based debugging agent.
-
-It checks for workflow mistakes such as:
-
-- Missing dataset declaration
-- Missing model declaration
-- Training before dataset loading
-- Evaluation before training
-- Prediction before training
-- Deployment without evaluation
-- Monitoring without deployment
-- Unsupported task type
-- Missing hyperparameters
-
-Purpose:
-
-```text
-Provide reliable compiler diagnosis without depending on external LLM APIs.
-```
-
-### 3. optional_llm_review
-
-This node runs only when LLM support is enabled and an API key is available.
-
-It can use:
-
-- LangChain
-- OpenAI
-- Gemini
-- User-selected LLM model
-
-Purpose:
-
-```text
-Generate a more human-readable explanation of compiler errors and workflow issues.
-```
-
-If no key is available, the system safely falls back to the deterministic agent.
-
-### 4. synthesize
-
-This node combines all debugging outputs into one final report.
-
-It merges:
-
-- Deterministic diagnosis
-- Optional LLM explanation
-- Workflow graph
-- Error explanation
-- Fix suggestions
-- Production-readiness score
-- Final compiler status
-
-Purpose:
-
-```text
-Produce the AI Agent Report shown in the CLI and Web IDE.
-```
-
-## What the AI agent does
-
-The AI agent works like an intelligent compiler assistant.
-
-It does not mutate the source code automatically.
-
-It does not change the compiler output.
-
-It observes the compiler and explains the result.
-
-The agent can:
-
-- Explain compiler errors in simple language
-- Suggest fixes for invalid DSL programs
-- Validate ML workflow order
-- Detect missing pipeline stages
-- Generate workflow graphs
-- Produce a production-readiness score
-- Generate a structured AI Agent Report
-- Use optional LLM reasoning when enabled
-- Fall back safely when LLM packages or API keys are missing
-
-Example:
-
-If the user writes:
-
-```text
-PIPELINE BrokenPipeline
-MODEL fraud_model TASK 'classification'
-TRAIN fraud_model ON transactions EPOCHS 10
-DATASET transactions FROM 's3://fintech-data/transactions.csv'
-ENDPIPELINE
-```
-
-The compiler detects the issue.
-
-The agent explains:
-
-```text
-The model is being trained on dataset 'transactions' before the dataset is declared.
-Move the DATASET declaration before the TRAIN step.
-```
-
-Correct version:
-
-```text
-PIPELINE FixedPipeline
-DATASET transactions FROM 's3://fintech-data/transactions.csv'
-MODEL fraud_model TASK 'classification'
-TRAIN fraud_model ON transactions EPOCHS 10
-ENDPIPELINE
-```
-
-## Technical stack
-
-| Area | Technology |
-|---|---|
-| Language | Python |
-| Compiler Stages | Lexer, Parser, Semantic Analyzer, IR, TAC, Code Generation |
-| AI DSL | Custom ML Workflow DSL |
-| Agent Orchestration | LangGraph |
-| LLM Integration | LangChain, OpenAI, Gemini |
-| ML Runtime | pandas, scikit-learn |
-| Web IDE | HTML, CSS, JavaScript, Flask-style server |
-| CLI | Python argparse |
-| Outputs | Tokens, AST, TAC, pseudo-assembly, listing, runtime logs, agent reports |
-| Testing | Python demo scripts and sample DSL programs |
-
-## Project features
-
-### 1. AI Workflow DSL
-
-The project supports high-level ML pipeline commands:
-
-```text
-PIPELINE
-DATASET
-MODEL
-SET
-TRAIN
-EVALUATE
-PREDICT
-DEPLOY
-MONITOR
-LOG
-ENDPIPELINE
-```
-
-This allows users to describe ML workflows in a readable DSL instead of writing full Python scripts manually.
-
-### 2. Compiler pipeline
-
-The project includes a full compiler-style pipeline:
-
-```text
-Source Code → Tokens → AST → Semantic Analysis → TAC → Assembly → Runtime Output
-```
-
-This demonstrates strong compiler engineering fundamentals.
-
-### 3. AI DSL lowering
-
-The AI Workflow DSL is lowered into the internal compiler representation.
-
-This allows the system to preserve the existing compiler architecture while extending it with AI workflow semantics.
-
-### 4. Semantic validation
-
-The compiler validates whether the program is structurally correct.
-
-Examples of validation:
-
-- Dataset must be declared before training
-- Model must exist before training
-- Model should be trained before evaluation
-- Evaluation should happen before deployment
-- Prediction should use an existing model
-
-### 5. Runtime execution
-
-For supported workflows, the runtime layer can use:
-
-- pandas for CSV loading
-- scikit-learn for model training
-- local sample data for demo execution
-
-This makes the project more than a syntax-only compiler.
-
-### 6. LangGraph agentic debugging
-
-The LangGraph layer turns compiler debugging into a multi-step agent workflow.
-
-It observes compiler state, diagnoses the issue, optionally calls an LLM, and synthesizes a final report.
-
-### 7. Optional LLM layer
-
-The project can run with or without LLM APIs.
-
-Supported modes:
-
-```text
-deterministic
-llm
-langgraph
-langgraph-llm
-auto
-```
-
-This design is important because the project remains usable even without external API keys.
-
-### 8. Web IDE
-
-The project includes a browser-based IDE that can display:
-
-- Program output
-- Tokens
-- AST
-- TAC
-- Assembly
-- Errors
-- Lowered core code
-- AI Agent Report
-
-### 9. Error report generation
-
-The agent report is generated even when the compiler fails.
-
-This means invalid DSL programs still produce useful debugging output instead of only crashing.
-
-
-## AI Workflow DSL Grammar
-
-The project includes a compact domain-specific language for describing AI and ML workflows. The grammar is written in an EBNF-style format so recruiters, reviewers, and engineers can quickly understand what the compiler accepts.
-
-```ebnf
-program        ::= pipeline_decl statement* endpipeline
-
-pipeline_decl  ::= 'PIPELINE' IDENT
-endpipeline    ::= 'ENDPIPELINE'
-
-statement      ::= dataset_decl
-                 | model_decl
-                 | set_stmt
-                 | train_stmt
-                 | evaluate_stmt
-                 | predict_stmt
-                 | deploy_stmt
-                 | monitor_stmt
-                 | log_stmt
-
-dataset_decl   ::= 'DATASET' IDENT 'FROM' STRING
-model_decl     ::= 'MODEL' IDENT 'TASK' STRING
-set_stmt       ::= 'SET' IDENT '=' NUMBER
-train_stmt     ::= 'TRAIN' IDENT 'ON' IDENT 'EPOCHS' NUMBER
-evaluate_stmt  ::= 'EVALUATE' IDENT
-predict_stmt   ::= 'PREDICT' IDENT 'INPUT' NUMBER ('INTO' IDENT)?
-deploy_stmt    ::= 'DEPLOY' IDENT 'TO' STRING
-monitor_stmt   ::= 'MONITOR' IDENT
-log_stmt       ::= 'LOG' STRING
-```
-
-### Lexical rules
-
-```text
-IDENT   = letter_or_underscore followed by letters, digits, or underscores
-NUMBER  = integer literal
-STRING  = single-quoted string literal
-COMMENT = line starting with #
-```
-
-Examples:
-
-```text
-IDENT   -> churn_model, customers, fraud_detector
-NUMBER  -> 10, 25, 128
-STRING  -> 'classification', 's3://bucket/data.csv', 'staging'
-```
-
-### Statement meaning
-
-| DSL statement | Meaning |
-|---|---|
-| `PIPELINE name` | Starts a new AI workflow block. |
-| `DATASET ds FROM 'path'` | Registers a dataset source such as a local CSV path or cloud URI. |
-| `MODEL m TASK 'classification'` | Defines a model and its ML task type. |
-| `SET key = value` | Stores a numeric workflow parameter such as batch size or learning rate. |
-| `TRAIN m ON ds EPOCHS n` | Trains a declared model on a declared dataset. |
-| `EVALUATE m` | Evaluates a trained model. |
-| `PREDICT m INPUT n INTO output` | Runs prediction using a numeric input or row index and stores the result. |
-| `DEPLOY m TO 'target'` | Marks the model for deployment to an environment. |
-| `MONITOR m` | Emits monitoring information for the model. |
-| `LOG 'message'` | Writes a workflow log message. |
-| `ENDPIPELINE` | Closes the workflow block. |
-
-### Valid workflow order
-
-The compiler and agent both expect the pipeline to follow a safe ML workflow order:
-
-```text
-PIPELINE
-  DATASET
-  MODEL
-  SET
-  TRAIN
-  EVALUATE
-  PREDICT
-  DEPLOY
-  MONITOR
-  LOG
-ENDPIPELINE
-```
-
-Not every statement is mandatory, but critical dependencies must be respected:
-
-```text
-DATASET must be declared before TRAIN
-MODEL must be declared before TRAIN, EVALUATE, PREDICT, DEPLOY, or MONITOR
-TRAIN should happen before EVALUATE or PREDICT
-EVALUATE should happen before DEPLOY in production-style workflows
-```
-
-### Example accepted program
-
-```text
-PIPELINE CustomerChurnOps
-DATASET customers FROM 's3://ml-bucket/customer_churn.csv'
-MODEL churn_model TASK 'classification'
-SET batch_size = 64
-SET learning_rate = 1
-TRAIN churn_model ON customers EPOCHS 12
-EVALUATE churn_model
-PREDICT churn_model INPUT 25 INTO churn_score
-DEPLOY churn_model TO 'staging'
-MONITOR churn_model
-LOG 'Pipeline executed successfully'
-ENDPIPELINE
-```
-
-### Example rejected program
-
-```text
-PIPELINE BrokenFraudPipeline
-MODEL fraud_model TASK 'classification'
-TRAIN fraud_model ON transactions EPOCHS 10
-DATASET transactions FROM 's3://fintech-data/transactions.csv'
-ENDPIPELINE
-```
-
-Why it fails:
-
-```text
-The TRAIN statement uses dataset transactions before the DATASET statement declares it.
-```
-
-The LangGraph agentic debugger converts this compiler failure into a human-readable diagnosis and a suggested fix.
-
-### Lowering into core compiler representation
-
-The AI DSL is not only interpreted as text. It is lowered into a Pascal-like core compiler representation before passing through the existing compiler stages.
-
-Example DSL:
-
-```text
-TRAIN churn_model ON customers EPOCHS 12
-```
-
-Lowered compiler-style representation:
-
-```text
-trained_churn_model := 1;
-accuracy_churn_model := 80;
-write('Training model churn_model on dataset customers for 12 epochs');
-```
-
-This gives the project two layers:
-
-```text
-AI Workflow DSL Grammar
-        ↓
-AI DSL Lowering Layer
-        ↓
-Core Compiler Grammar
-        ↓
-Lexer → Parser → Semantic Analyzer → TAC → Assembly → Runtime Output
-```
-
-## Sample DSL programs
-
-### Customer churn pipeline
-
-```text
-PIPELINE CustomerChurnOps
-DATASET customers FROM 's3://ml-bucket/customer_churn.csv'
-MODEL churn_model TASK 'classification'
-SET batch_size = 64
-SET learning_rate = 1
-TRAIN churn_model ON customers EPOCHS 12
-EVALUATE churn_model
-PREDICT churn_model INPUT 25 INTO churn_score
-DEPLOY churn_model TO 'staging'
-MONITOR churn_model
-LOG 'Pipeline executed successfully'
-ENDPIPELINE
-```
-
-### Fraud detection pipeline
-
-```text
-PIPELINE FraudDetectionOps
-DATASET transactions FROM 's3://fintech-data/transactions.csv'
-MODEL fraud_model TASK 'classification'
-SET batch_size = 128
-SET learning_rate = 0.01
-SET threshold = 0.85
-TRAIN fraud_model ON transactions EPOCHS 20
-EVALUATE fraud_model
-PREDICT fraud_model INPUT 1001 INTO fraud_risk_score
-DEPLOY fraud_model TO 'production'
-MONITOR fraud_model
-LOG 'Fraud detection pipeline completed successfully'
-ENDPIPELINE
-```
-
-### Broken pipeline for testing agent debugging
-
-```text
-PIPELINE BrokenFraudPipeline
-MODEL fraud_model TASK 'classification'
-TRAIN fraud_model ON transactions EPOCHS 10
-EVALUATE fraud_model
-DATASET transactions FROM 's3://fintech-data/transactions.csv'
-DEPLOY fraud_model TO 'staging'
-MONITOR fraud_model
-ENDPIPELINE
-```
-
-Expected agent explanation:
-
-```text
-The model is being trained on dataset 'transactions' before the dataset is declared.
-Move the DATASET declaration before the TRAIN step.
-```
-
-## Repository structure
-
-```text
-ai-workflow-dsl-compiler/
+acd-project/
+├── .env.example                     # Configuration template for optional LLM keys
+├── .gitignore                       # Clean Git ignore specification
+├── README.md                        # Project documentation
+├── report.md                        # Detailed benchmark and architectural report
+├── requirements.txt                 # Core dependencies
+├── requirements-agent.txt           # Optional agent dependencies
+├── server.py                        # Web IDE server launcher
+├── Dockerfile                       # Container deployment definition
 │
-├── README.md
-├── requirements.txt
-├── requirements-agent.txt
-├── server.py
+├── benchmarks/
+│   ├── benchmark_compiler.py        # Automated compiler throughput benchmark suite
+│   └── benchmark_results.json       # Baseline performance evidence
 │
-├── src/
-│   ├── lexer.py
-│   ├── parser.py
-│   ├── ast_nodes.py
-│   ├── symbol_table.py
-│   ├── icg.py
-│   ├── codegen.py
-│   ├── listing.py
-│   ├── interpreter.py
-│   ├── ai_dsl.py
-│   ├── ai_runtime.py
-│   ├── agentic_debugger.py
-│   ├── llm_layer.py
-│   ├── langgraph_layer.py
-│   ├── agent_orchestrator.py
-│   └── main.py
+├── docs/                            # In-depth architectural & specification documentation
 │
-├── examples/
-│   ├── healthcare.aidl
-│   ├── finance.aidl
-│   ├── nlp.aidl
-│   └── real_training.aidl
+├── examples/                        # Validated sample business workflows
+│   ├── invoice_processing.workflow  # Invoice approval workflow
+│   ├── order_processing.workflow    # Order validation & dispatch workflow
+│   ├── customer_support.workflow    # Ticket prioritization & SLA escalation
+│   ├── order_fulfillment.bdsl       # Order fulfillment with discounts
+│   ├── invoice_workflow.bdsl        # Minimal invoice workflow
+│   └── faulty_workflow.bdsl         # Diagnostic sample for Agentic Debugger
 │
-├── tests/
-│   ├── ai_sample.aidl
-│   ├── ai_error.aidl
-│   ├── sample.pas
-│   ├── error_test.pas
-│   └── run_agent_demo.py
+├── scripts/
+│   └── clean.py                     # Safe artifact cleanup utility
 │
-├── data/
-│   └── customers.csv
+├── src/                             # Core Compiler & VM Implementation
+│   ├── main.py                      # CLI driver & pipeline coordinator
+│   ├── lexer.py                     # Phase 1: Lexical analyzer (tokenizer)
+│   ├── parser.py                    # Phase 2: Recursive-descent AST parser
+│   ├── ast_nodes.py                 # Typed AST node definitions
+│   ├── business_semantics.py        # Phase 3a: Static semantic analysis & type system
+│   ├── symbol_table.py              # Symbol table & scope manager
+│   ├── icg.py                       # Phase 3b: Three-Address Code (TAC) generator
+│   ├── ir_optimizer.py              # Phase 3c: Intermediate representation optimizer
+│   ├── codegen.py                   # Phase 4: Target pseudo-assembly generator
+│   ├── workflow_vm.py               # Phase 5: Workflow Virtual Machine runtime
+│   ├── mock_services.py             # Mock enterprise service drivers
+│   ├── service_registry.py          # Service integration registry
+│   ├── interpreter.py               # AST interpreter for core procedural grammar
+│   ├── listing.py                   # Compiler listing file generator (.lst)
+│   ├── nl_to_dsl.py                 # AI Front-End (Natural Language → DSL)
+│   ├── ai_assistant.py              # AI explanation provider
+│   └── agentic_debugger.py          # Rule-based and LLM diagnostic engine
 │
-├── web_demo/
-│   ├── server.py
-│   └── static/
-│       ├── index.html
-│       ├── styles.css
-│       └── app.js
+├── tests/                           # Complete Test Suite (149 Test Cases)
+│   ├── test_business_semantics.py   # Semantic analyzer test cases
+│   ├── test_type_system.py          # Static type system tests
+│   ├── test_symbol_table_scopes.py  # Scope and identifier resolution tests
+│   ├── test_ir_generation.py        # Three-Address Code verification
+│   ├── test_ir_optimizer.py         # Optimizer passes verification
+│   ├── test_cfg.py                  # Control flow graph construction tests
+│   ├── test_workflow_vm.py          # Virtual Machine execution tests
+│   ├── test_mock_services.py        # Enterprise mock driver tests
+│   ├── test_execution_trace.py      # VM step-by-step trace tests
+│   ├── test_nl_to_dsl.py            # Natural Language conversion tests
+│   ├── test_ai_assistant.py         # Assistant explanation tests
+│   ├── test_agentic_debugger_workflow.py # Agentic debugger diagnostics tests
+│   ├── test_end_to_end.py           # Core end-to-end integration tests
+│   └── test_e2e_comprehensive.py    # Comprehensive end-to-end pipeline suite
 │
-└── output/
+└── web_demo/                        # Interactive Web IDE Frontend & Backend
+    ├── server.py                    # HTTP API server
+    └── static/                      # Frontend assets (HTML5, Vanilla CSS, JS)
 ```
 
-## How to run locally on Windows
+---
 
-### Step 1: Clone the repository
+## Getting Started
 
+### Prerequisites
+- Python 3.10+ (tested on Python 3.10, 3.11, 3.12)
+- Zero external packages required for core compiler, VM, and Web IDE! (Standard library only).
+
+### Installation
+Clone the repository:
 ```bash
-git clone https://github.com/vedantjhunjhunwal/agentic-ai-dsl-workflow-compiler
-cd gentic-ai-dsl-workflow-compiler
+git clone https://github.com/mohammednizamuddinanzar-beep/acd-project.git
+cd acd-project
 ```
 
-### Step 2: Create a virtual environment
-
+(Optional) Create and activate a virtual environment:
 ```bash
 python -m venv .venv
+# On Windows:
 .venv\Scripts\activate
+# On Linux / macOS:
+source .venv/bin/activate
 ```
 
-### Step 3: Install core dependencies
-
+Install optional dependencies (required only for ML dataset runtime / third-party LLM providers):
 ```bash
-pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### Step 4: Run the normal compiler
+---
 
-```bash
-python src/main.py examples/real_training.aidl -o output
-```
+## Usage Guide
 
-### Step 5: Run with deterministic AI agent report
-
-```bash
-python src/main.py examples/real_training.aidl -o output --agent-report --agent-backend deterministic
-```
-
-### Step 6: Run with LangGraph
-
-```bash
-pip install -r requirements-agent.txt
-python src/main.py examples/real_training.aidl -o output --agent-report --agent-backend langgraph
-```
-
-### Step 7: Run the Web IDE
-
+### 1. Interactive Web IDE
+Launch the Web IDE:
 ```bash
 python server.py
 ```
+Open your browser and navigate to:
+```
+http://127.0.0.1:8080
+```
+- Click on any sample workflow button (`Invoice Processing`, `Order Processing`, `Customer Support`, `Faulty Workflow`).
+- Click **`Compile & Execute`** (or press `Ctrl + Enter`).
+- Explore the interactive panels: **VM Trace**, **Mock Services**, **Control Flow Graph**, **Errors & Diagnostics**, **TAC Quadruples**, and **Agentic Debugger**.
 
-Open:
+---
 
-```text
-http://127.0.0.1:5000
+### 2. Command-Line Interface (CLI)
+
+#### Compile and Execute a Workflow:
+```bash
+python src/main.py examples/invoice_processing.workflow --run
 ```
 
-## How to run locally on macOS / Linux
+#### Compile and Generate Target Assembly + Listing:
+```bash
+python src/main.py examples/invoice_processing.workflow -o output
+```
+*Outputs are saved to `output/invoice_processing.asm` and `output/invoice_processing.lst`.*
+
+#### Run the Agentic Debugger on a Buggy Workflow:
+```bash
+python src/main.py examples/faulty_workflow.bdsl --agent-report
+```
+
+---
+
+### 3. Natural Language to DSL (AI Front-End)
+Translate plain English workflow descriptions directly into valid DSL code:
+```bash
+python src/main.py --nl "When an invoice arrives by email, extract the amount and notify finance if it is above 50000."
+```
+
+---
+
+### 4. Agentic Debugger
+The Agentic Debugger evaluates workflows along **7 Core Diagnostic Dimensions**:
+1. **Undefined Variables**: Missing `EXTRACT` or `SET` statements before use.
+2. **Duplicate Variable Declarations**: Redeclaring variables within the same scope.
+3. **Invalid Actions**: Typographical errors or unrecognized keywords (e.g. `DISPATCH`).
+4. **Invalid Trigger Events**: Event names that do not follow the `<domain>.<action>` format.
+5. **Static Type Mismatches**: Numeric variables compared with strings or assigned string literals.
+6. **Execution Order Violations**: Using variables prior to their declaration.
+7. **Malformed Workflow Structure**: Missing headers, unclosed braces, or statements outside `WORKFLOW`.
+
+---
+
+### 5. Safe Project Cleanup
+To safely clean intermediate compilation files, temporary logs, and bytecode caches:
+```bash
+python src/main.py --clean
+```
+or:
+```bash
+python scripts/clean.py
+```
+
+---
+
+## Curated Workflow Examples
+
+### Example 1: Invoice Processing
+```dsl
+WORKFLOW InvoiceProcessing {
+    ON email.received
+
+    EXTRACT amount FROM email
+    EXTRACT vendor FROM email
+    EXTRACT invoice_id FROM email
+
+    IF amount > 50000 {
+        NOTIFY finance
+        NOTIFY manager
+    }
+
+    CALL notify_erp
+    SAVE invoice TO database
+    NOTIFY vendor
+}
+```
+
+### Example 2: Order Fulfillment with Entity Validation
+```dsl
+WORKFLOW OrderProcessing {
+    ON order.created
+
+    VALIDATE order
+    EXTRACT amount FROM order
+    EXTRACT customer FROM order
+    EXTRACT order_id FROM order
+
+    IF amount > 10000 {
+        NOTIFY manager
+    }
+
+    CALL process_order
+    SAVE order TO database
+    NOTIFY customer
+}
+```
+
+### Example 3: Customer Support Ticket Escalation
+```dsl
+WORKFLOW CustomerSupport {
+    ON ticket.created
+
+    EXTRACT priority FROM ticket
+    EXTRACT ticket_id FROM ticket
+
+    IF priority == "HIGH" {
+        NOTIFY manager
+        NOTIFY oncall_engineer
+    }
+
+    SAVE ticket TO database
+}
+```
+
+---
+
+## Virtual Machine & Mock Integrations
+
+The **Workflow VM** executes compiled Three-Address Code with full enterprise integration simulation:
+- **`MockDatabase`**: Tracks entity records created via `SAVE <entity> TO database`.
+- **`MockNotificationService`**: Records dispatch logs for `NOTIFY <recipient>`.
+- **`MockExternalService`**: Simulates external API calls invoked via `CALL <service>`.
+- **`Simulated Clock`**: Tracks simulated duration and latency for `WAIT` and `RETRY` steps.
+
+---
+
+## Test Suite & Verification
+
+The project includes an automated test suite comprising **149 test cases** covering every compiler phase, edge case, and end-to-end flow:
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/ai-workflow-dsl-compiler.git
-cd ai-workflow-dsl-compiler
-
-python3 -m venv .venv
-source .venv/bin/activate
-
-pip install --upgrade pip
-pip install -r requirements.txt
-
-python3 src/main.py examples/real_training.aidl -o output --agent-report --agent-backend deterministic
+python -m unittest discover -s tests
 ```
 
-To run with LangGraph:
+### Test Results:
+```text
+Ran 149 tests in 0.148s
 
+OK
+```
+
+Test coverage includes:
+- `test_business_semantics.py`: Semantic rules (undefined variables, duplicate definitions, event formats).
+- `test_type_system.py`: Type mismatch and relational comparison tests.
+- `test_symbol_table_scopes.py`: Lexical scoping and variable lookup tests.
+- `test_ir_generation.py`: TAC instruction and opcode generation tests.
+- `test_ir_optimizer.py`: Constant folding and dead code elimination tests.
+- `test_workflow_vm.py`: Bytecode execution, environments, and branching tests.
+- `test_mock_services.py`: Mock DB, email, and API activity tracking tests.
+- `test_nl_to_dsl.py`: Rule-based and LLM prompt translation tests.
+- `test_agentic_debugger_workflow.py`: Error diagnostic and patch generation tests.
+- `test_e2e_comprehensive.py`: Full end-to-end pipeline execution tests.
+
+---
+
+## Performance Benchmarks
+
+Run the compiler performance benchmark suite:
 ```bash
-pip install -r requirements-agent.txt
-python3 src/main.py examples/real_training.aidl -o output --agent-report --agent-backend langgraph
+python benchmarks/benchmark_compiler.py
 ```
 
-To run the Web IDE:
+### Benchmark Summary:
+| Operation | Mean Latency | Median Latency | Scale / Throughput |
+|---|---|---|---|
+| **Lexer Tokenization** | `0.34 ms` | `0.39 ms` | ~3,000 passes/sec |
+| **Semantic Analysis** | `0.48 ms` | `0.37 ms` | ~2,500 passes/sec |
+| **Full Compilation (Simple)** | `1.34 ms` | `1.21 ms` | ~750 workflows/sec |
+| **Full Compilation (Medium)** | `2.65 ms` | `2.00 ms` | ~380 workflows/sec |
+| **Full Compilation (Complex)** | `3.29 ms` | `2.51 ms` | ~300 workflows/sec |
+| **VM Execution (Medium)** | `2.64 ms` | `1.95 ms` | Full trace + Mock I/O |
+| **NL-to-DSL Translation** | `0.11 ms` | `0.04 ms` | Instantaneous |
+| **AI Mock Provider Explanation** | `0.01 ms` | `0.01 ms` | Zero runtime overhead |
+| **Scale Test (100 sequential runs)**| `1.05 ms / run` | `1.05 ms` | 100% pass rate |
 
-```bash
-python3 server.py
-```
+*Detailed benchmark evidence is recorded in [`benchmarks/benchmark_results.json`](file:///d:/ACD_CBP/agentic-ai-dsl-workflow-compiler/benchmarks/benchmark_results.json).*
 
-Open:
-
-```text
-http://127.0.0.1:5000
-```
-
-## Running with LangGraph and LLM
-
-The project can optionally call an LLM through LangChain.
-
-### OpenAI example on Windows PowerShell
-
-```powershell
-$env:OPENAI_API_KEY="your_api_key_here"
-python src/main.py examples/real_training.aidl -o output --agent-report --agent-backend langgraph-llm --llm-provider openai --llm-model gpt-4o-mini
-```
-
-### OpenAI example on macOS / Linux
-
-```bash
-export OPENAI_API_KEY="your_api_key_here"
-python3 src/main.py examples/real_training.aidl -o output --agent-report --agent-backend langgraph-llm --llm-provider openai --llm-model gpt-4o-mini
-```
-
-If the API key is missing, the system falls back to the deterministic agent.
-
-## Running the error-report demo
-
-Use this command to test whether the AI agent reports errors correctly:
-
-```bash
-python src/main.py tests/ai_error.aidl -o output --agent-report --agent-backend langgraph
-```
-
-Expected behavior:
-
-- Compiler detects the error
-- Agent observes the failed state
-- Agent explains the issue
-- Agent suggests a fix
-- CLI or Web IDE shows the AI Agent Report
-
-## Generated outputs
-
-A successful run can produce:
-
-```text
-output/<program>.lst
-output/<program>.asm
-AI Agent Report
-Runtime Output
-Compiler Diagnostics
-```
-
-The most important outputs are:
-
-- Listing file
-- Assembly file
-- Agent report
-- Runtime output
-- Error explanation
-
-## Example workflow output
-
-```text
-load_source → Source file loaded
-lex → Tokens generated
-parse → AST generated
-semantic_check → Symbols and workflow order validated
-generate_tac → Three-Address Code generated
-generate_assembly → Pseudo assembly generated
-execute_runtime → Supported workflow executed
-observe → Agent collected compiler state
-deterministic_diagnose → Agent analyzed workflow issues
-optional_llm_review → Optional LLM review completed or skipped
-synthesize → Final AI Agent Report generated
-```
-
-Final status:
-
-```text
-completed
-```
-
-For a broken workflow:
-
-```text
-compile_failed
-agent_report_generated
-fix_suggestions_available
-```
-
-## Why this is more than a basic AI project
-
-A basic AI project usually works like this:
-
-```text
-Prompt → LLM → Answer
-```
-
-This project works like this:
-
-```text
-DSL Program
-→ Lexer
-→ Parser
-→ Semantic Analyzer
-→ TAC Generator
-→ Runtime Executor
-→ LangGraph Agent
-→ Optional LLM Review
-→ AI Agent Report
-```
-
-This makes it a real AI systems project because it includes:
-
-- Deterministic compiler pipeline
-- Custom DSL design
-- Semantic validation
-- Intermediate code generation
-- Runtime execution
-- Agent orchestration
-- Optional LLM reasoning
-- Error diagnosis
-- Workflow validation
-- Human-readable debugging reports
-
-## Design principles
-
-### 1. Deterministic compiler first
-
-The compiler is the source of truth.
-
-The AI agent does not replace lexical analysis, parsing, semantic validation, or code generation.
-
-### 2. Agent as a debugging assistant
-
-The agent explains what happened and suggests how to fix it.
-
-It does not blindly rewrite the program.
-
-### 3. Safe LLM fallback
-
-The project works without API keys.
-
-LLM support is optional.
-
-This makes the system reliable for local demos and recruiter review.
-
-### 4. Error-aware reporting
-
-The agent report is generated even when compilation fails.
-
-This is important because debugging support is most useful when something goes wrong.
-
-### 5. Developer-friendly output
-
-The project produces both compiler artifacts and readable explanations.
-
-This helps bridge low-level compiler internals and practical ML workflow development.
-
-## project summary
-
-This project demonstrates the intersection of compiler engineering, AI agent orchestration, and ML workflow automation.
-
-It shows the ability to design a custom DSL, implement deterministic compiler stages, integrate runtime execution, and add a LangGraph-based agent layer that diagnoses errors and improves developer experience.
-
-The core engineering idea is simple:
-
-```text
-Keep the compiler reliable.
-Use the agent for reasoning, explanation, validation, and debugging.
-```
-
-
+---
 
 ## License
 
-This project is intended for educational, research, and portfolio purposes.
-
-
-## Google Cloud Run Deployment
-
-This repository includes deployment files for Google Cloud Run:
-
-- `Dockerfile`
-- `.dockerignore`
-- `.gcloudignore`
-- `cloudbuild.yaml`
-- `DEPLOYMENT_GCP.md`
-
-Deploy directly from source:
-
-```bash
-gcloud run deploy ai-workflow-compiler-agent \
-  --source . \
-  --region asia-south1 \
-  --allow-unauthenticated \
-  --memory 1Gi \
-  --cpu 1 \
-  --concurrency 15 \
-  --min-instances 0 \
-  --max-instances 30 \
-  --timeout 300
-```
-
-Or deploy with Cloud Build:
-
-```bash
-gcloud builds submit --config cloudbuild.yaml
-```
-
-Recommended settings for a 500-user demo are 1 vCPU, 1 GiB memory, concurrency 15, min instances 0, and max instances 30. See `DEPLOYMENT_GCP.md` for the full guide.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

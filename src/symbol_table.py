@@ -48,6 +48,9 @@ class ProcedureType(TypeDesc):
 # ──────────────────────────────────────────────────────────
 #  Symbol entry
 # ──────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
+#  Symbol entry
+# ──────────────────────────────────────────────────────────
 @dataclass
 class Symbol:
     name:          str
@@ -57,6 +60,10 @@ class Symbol:
     param_index:   int   = -1
     memory_offset: int   = 0
     line_declared: int   = 0
+    col_declared:  int   = 1
+    initialized:   bool  = True
+    source_loc:    Optional[str] = None
+    scope:         str   = "global"
 
 
 # ──────────────────────────────────────────────────────────
@@ -75,6 +82,7 @@ class Scope:
         if sym.name in self.symbols:
             return False
         sym.scope_level   = self.level
+        sym.scope         = self.name
         sym.memory_offset = self.offset
         self.offset      += 1
         self.symbols[sym.name] = sym
@@ -118,14 +126,18 @@ class SymbolTable:
         return finished
 
     # ── Symbol operations ─────────────────────────────────
-    def declare(self, name: str, sym_type: TypeDesc, line: int, is_param: bool = False, param_index: int = -1) -> bool:
+    def declare(self, name: str, sym_type: TypeDesc, line: int, col: int = 1, initialized: bool = True, source_loc: Optional[str] = None, is_param: bool = False, param_index: int = -1) -> bool:
         sym = Symbol(
             name=name,
             sym_type=sym_type,
             scope_level=self.current_scope.level,
             is_param=is_param,
             param_index=param_index,
-            line_declared=line
+            line_declared=line,
+            col_declared=col,
+            initialized=initialized,
+            source_loc=source_loc,
+            scope=self.current_scope.name
         )
         ok = self.current_scope.declare(sym)
         if not ok:
@@ -137,6 +149,10 @@ class SymbolTable:
 
     def lookup_local(self, name: str) -> Optional[Symbol]:
         return self.current_scope.lookup_local(name)
+
+    def lookup_current_scope(self, name: str) -> Optional[Symbol]:
+        return self.current_scope.lookup_local(name)
+
 
     # ── Pretty print ──────────────────────────────────────
     def dump(self):

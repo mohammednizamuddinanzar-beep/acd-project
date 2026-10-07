@@ -142,7 +142,7 @@ class Lexer:
     # ── Token scanners ────────────────────────────────────
     def _scan_identifier_or_keyword(self, line: int, col: int) -> Token:
         buf = []
-        while self.pos < len(self.source) and (self._current().isalpha() or self._current().isdigit()):
+        while self.pos < len(self.source) and (self._current().isalpha() or self._current().isdigit() or self._current() == '_'):
             buf.append(self._advance())
         raw   = ''.join(buf)
         lower = raw.lower()
@@ -200,7 +200,7 @@ class Lexer:
             ch   = self._current()
 
             # Identifier / keyword
-            if ch.isalpha():
+            if ch.isalpha() or ch == '_':
                 self.tokens.append(self._scan_identifier_or_keyword(line, col))
                 continue
 
@@ -275,9 +275,10 @@ class Lexer:
 #  Pretty-print token table
 # ──────────────────────────────────────────────────────────
 def print_token_table(tokens: List[Token]):
-    print("\n" + "═" * 70)
+    border = "=" * 70
+    print("\n" + border)
     print(f"  {'TYPE':<22} {'VALUE':<25} {'LINE':>5} {'COL':>5}")
-    print("═" * 70)
+    print(border)
     for tok in tokens:
         print(f"  {tok.type.name:<22} {tok.value!r:<25} {tok.line:>5} {tok.column:>5}")
-    print("═" * 70)
+    print(border)

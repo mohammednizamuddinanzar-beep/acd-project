@@ -119,8 +119,11 @@ class OptionalLLMReviewer:
             "source_preview": source[:4000],
         }
         return (
-            "You are a senior AI agent compiler reviewer. Review this AI Workflow DSL compiler run. "
-            "Do not change the compiler logic. Return concise JSON with keys: summary, recommendations. "
+            "You are a senior AI agent compiler reviewer. Review this Business Workflow / AI DSL compiler run. "
+            "Examine compiler artifacts for undefined variables, invalid actions, event dependencies, type errors, "
+            "execution order, unreachable actions, and missing workflow steps. "
+            "Do not change the compiler logic or execute workflows directly. "
+            "Return concise JSON with keys: summary, recommendations. "
             "recommendations must be a list of practical engineering actions.\n\n"
             + json.dumps(compact, indent=2, default=str)
         )

@@ -1,16 +1,58 @@
-.venv/
-venv/
+# ==============================================================================
+# .gitignore — Business Automation Workflow DSL Compiler
+# ==============================================================================
+
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
+*.so
 *.pyd
-.env
-.env.*
-output/
-artifacts/
-*.zip
-.DS_Store
-.idea/
-.vscode/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Unit test / coverage / typing caches
+.coverage
+htmlcov/
 .pytest_cache/
 .mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+
+# Generated compiler outputs and temporary artifacts
+output/
+artifacts/
+compilation/
+*.lst
+*.asm
+*.tmp
+*.log
+workflow_cfg.dot
+*.dot
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini

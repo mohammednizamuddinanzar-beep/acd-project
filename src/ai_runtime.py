@@ -1,17 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import datetime
 from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional
-
-import pandas as pd
-from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LogisticRegression, LinearRegression
-from sklearn.metrics import accuracy_score, r2_score
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 
 @dataclass
@@ -21,247 +14,276 @@ class AIRuntimeError(Exception):
     col: int = 1
 
     def __str__(self) -> str:
-        return self.message
+        return f"[RUNTIME ERROR] Line {self.line}: {self.message}"
+
+
+# Alias for domain clarity
+WorkflowRuntimeError = AIRuntimeError
+
+
+@dataclass
+class WorkflowExecutionContext:
+    variables: Dict[str, Any] = field(default_factory=dict)
+    database: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
+    notifications: List[Dict[str, Any]] = field(default_factory=list)
+    event_payload: Dict[str, Any] = field(default_factory=dict)
+    audit_logs: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class AIWorkflowRuntime:
-    def __init__(self, source: str, base_dir: Optional[str] = None):
+    """Business Workflow Execution Engine.
+
+    Executes compiled business workflow statements:
+      - ON: Trigger event listener with mock incoming payloads
+      - EXTRACT: Data extraction from incoming event records
+      - SET: Variable and parameter assignment
+      - IF / ELSE: Conditional branching logic
+      - SAVE: In-memory document & entity database persistence
+      - NOTIFY: In-memory notification dispatch & alerting
+      - LOG: Process status reporting
+    """
+
+    def __init__(self, source: str, base_dir: Optional[str] = None, event_payload: Optional[Dict[str, Any]] = None):
         self.source = source
         self.lines = source.splitlines()
         self.base_dir = Path(base_dir or '.').resolve()
-        self.pipeline_name = None
-        self.datasets: Dict[str, Dict[str, Any]] = {}
-        self.models: Dict[str, Dict[str, Any]] = {}
-        self.settings: Dict[str, Any] = {}
+        self.workflow_name: Optional[str] = None
         self.output: List[str] = []
         self.warnings: List[str] = []
 
-    def execute(self) -> Dict[str, Any]:
-        active = False
-        for idx, raw in enumerate(self.lines, start=1):
-            line = raw.strip()
-            if not line or line.startswith('#'):
-                continue
+        # In-memory execution state
+        self.variables: Dict[str, Any] = {}
+        self.database: Dict[str, List[Dict[str, Any]]] = {}
+        self.notifications: List[Dict[str, Any]] = []
+        self.audit_logs: List[Dict[str, Any]] = []
 
-            m = re.match(r'^PIPELINE\s+(\w+)$', line, re.I)
-            if m:
-                self.pipeline_name = m.group(1)
-                active = True
-                self.output.append(f'Pipeline Started: {self.pipeline_name}')
-                continue
-
-            if re.match(r'^ENDPIPELINE$', line, re.I):
-                if self.pipeline_name:
-                    self.output.append(f'Pipeline Completed: {self.pipeline_name}')
-                active = False
-                continue
-
-            if not active:
-                raise AIRuntimeError('Statements must appear inside PIPELINE ... ENDPIPELINE', idx, 1)
-
-            m = re.match(r"^DATASET\s+(\w+)\s+FROM\s+'([^']+)'$", line, re.I)
-            if m:
-                self._load_dataset(m.group(1), m.group(2), idx)
-                continue
-
-            m = re.match(r"^MODEL\s+(\w+)\s+TASK\s+'([^']+)'$", line, re.I)
-            if m:
-                self._register_model(m.group(1), m.group(2), idx)
-                continue
-
-            m = re.match(r'^SET\s+(\w+)\s*=\s*(-?\d+)$', line, re.I)
-            if m:
-                name, value = m.groups()
-                self.settings[name.lower()] = int(value)
-                self.output.append(f'Set {name} = {value}')
-                continue
-
-            m = re.match(r'^TRAIN\s+(\w+)\s+ON\s+(\w+)\s+EPOCHS\s+(\d+)$', line, re.I)
-            if m:
-                self._train_model(m.group(1), m.group(2), int(m.group(3)), idx)
-                continue
-
-            m = re.match(r'^EVALUATE\s+(\w+)$', line, re.I)
-            if m:
-                self._evaluate(m.group(1), idx)
-                continue
-
-            m = re.match(r'^PREDICT\s+(\w+)\s+INPUT\s*(-?\d+)\s+INTO\s+(\w+)$', line, re.I)
-            if m:
-                self._predict(m.group(1), int(m.group(2)), m.group(3), idx)
-                continue
-
-            m = re.match(r"^DEPLOY\s+(\w+)\s+TO\s+'([^']+)'$", line, re.I)
-            if m:
-                model, target = m.groups()
-                self._require_model(model, idx)
-                self.models[model.lower()]['deployed_to'] = target
-                self.output.append(f'Deployment Successful: {model} -> {target}')
-                continue
-
-            m = re.match(r'^MONITOR\s+(\w+)$', line, re.I)
-            if m:
-                model = self._require_model(m.group(1), idx)
-                info = self.models[model]
-                status = 'trained' if info.get('trained') else 'registered'
-                metric = info.get('metric_name')
-                value = info.get('metric_value')
-                suffix = f', {metric}={value:.4f}' if metric and value is not None else ''
-                self.output.append(f'Monitoring {model}: status={status}{suffix}')
-                continue
-
-            m = re.match(r"^LOG\s+'([^']*)'$", line, re.I)
-            if m:
-                self.output.append(m.group(1))
-                continue
-
-            raise AIRuntimeError('Unsupported AI DSL statement', idx, 1)
-
-        return {'output': '\n'.join(self.output), 'warnings': self.warnings}
-
-    def _dataset_path(self, path: str) -> Path:
-        p = Path(path)
-        if not p.is_absolute():
-            p = (self.base_dir / path).resolve()
-        return p
-
-    def _load_dataset(self, name: str, path: str, line: int):
-        file_path = self._dataset_path(path)
-        if not file_path.exists():
-            raise AIRuntimeError(f"Dataset file not found: {path}", line, 1)
-        try:
-            df = pd.read_csv(file_path)
-        except Exception as exc:
-            raise AIRuntimeError(f"Failed to read dataset '{path}': {exc}", line, 1)
-        if df.empty:
-            raise AIRuntimeError(f"Dataset '{path}' is empty", line, 1)
-        self.datasets[name.lower()] = {'path': str(file_path), 'dataframe': df}
-        self.output.append(f"Dataset Loaded: {name} ({len(df)} rows, {len(df.columns)} columns)")
-
-    def _register_model(self, name: str, task: str, line: int):
-        task_normalized = task.strip().lower()
-        if task_normalized not in {'classification', 'regression'}:
-            self.warnings.append(f"Line {line}: task '{task}' is not fully supported; using classification semantics when possible.")
-        self.models[name.lower()] = {
-            'task': task_normalized,
-            'trained': False,
-            'pipeline': None,
-            'dataset': None,
-            'metric_name': None,
-            'metric_value': None,
-            'prediction': None,
-            'prediction_var': None,
+        # Default mock event payload (e.g. for email.received)
+        self.mock_events: Dict[str, Dict[str, Any]] = {
+            'email': {
+                'amount': 75000,
+                'invoice_id': 'INV-2026-8891',
+                'sender': 'billing@supplier-corp.com',
+                'recipient': 'accounts-payable@company.com',
+                'subject': 'Invoice for Q3 Enterprise Services',
+            },
+            'order': {
+                'amount': 12000,
+                'order_id': 'ORD-5542',
+                'customer': 'enterprise_client_12',
+            },
+            'invoice': {
+                'amount': 75000,
+                'status': 'PENDING_APPROVAL',
+                'vendor': 'Acme Supplies',
+            }
         }
-        self.output.append(f"Model Registered: {name} [{task}]")
+        if event_payload:
+            self.mock_events['custom'] = event_payload
 
-    def _require_model(self, name: str, line: int) -> str:
-        key = name.lower()
-        if key not in self.models:
-            raise AIRuntimeError(f"Unknown model '{name}'", line, 1)
-        return key
+    def execute(self) -> Dict[str, Any]:
+        """Execute the workflow AST/statements sequentially with block support."""
+        self._execute_statements(self.lines)
+        return {
+            'output': '\n'.join(self.output),
+            'warnings': self.warnings,
+            'variables': dict(self.variables),
+            'database': dict(self.database),
+            'notifications': list(self.notifications),
+            'audit_logs': list(self.audit_logs),
+        }
 
-    def _require_dataset(self, name: str, line: int) -> str:
-        key = name.lower()
-        if key not in self.datasets:
-            raise AIRuntimeError(f"Unknown dataset '{name}'", line, 1)
-        return key
+    def _execute_statements(self, raw_lines: List[str]):
+        i = 0
+        while i < len(raw_lines):
+            line_idx = i + 1
+            raw = raw_lines[i]
+            line = raw.strip()
+            i += 1
 
-    def _infer_target_column(self, df: pd.DataFrame) -> Optional[str]:
-        preferred = ['target', 'label', 'class', 'y', 'output']
-        lowered = {c.lower(): c for c in df.columns}
-        for pref in preferred:
-            if pref in lowered:
-                return lowered[pref]
-        if len(df.columns) >= 2:
-            return df.columns[-1]
-        return None
+            if not line or line.startswith('#') or line.startswith('//'):
+                continue
 
-    def _build_pipeline(self, X: pd.DataFrame, task: str):
-        numeric_cols = X.select_dtypes(include=['number', 'bool']).columns.tolist()
-        categorical_cols = [c for c in X.columns if c not in numeric_cols]
-        numeric_transformer = Pipeline([
-            ('imputer', SimpleImputer(strategy='median')),
-            ('scaler', StandardScaler()),
-        ])
-        categorical_transformer = Pipeline([
-            ('imputer', SimpleImputer(strategy='most_frequent')),
-            ('onehot', OneHotEncoder(handle_unknown='ignore')),
-        ])
-        preprocess = ColumnTransformer([
-            ('num', numeric_transformer, numeric_cols),
-            ('cat', categorical_transformer, categorical_cols),
-        ])
-        if task == 'regression':
-            estimator = LinearRegression()
-        else:
-            estimator = LogisticRegression(max_iter=1000)
-        return Pipeline([
-            ('preprocess', preprocess),
-            ('model', estimator),
-        ])
+            # WORKFLOW / PIPELINE root
+            m_wf = re.match(r'^(?:WORKFLOW|PIPELINE)\s+(\w+)\s*\{?$', line, re.I)
+            if m_wf:
+                self.workflow_name = m_wf.group(1)
+                self.output.append(f"Workflow Started: {self.workflow_name}")
+                self._log_audit("WORKFLOW_START", f"Workflow {self.workflow_name} initialized")
+                continue
 
-    def _train_model(self, model_name: str, dataset_name: str, epochs: int, line: int):
-        model_key = self._require_model(model_name, line)
-        dataset_key = self._require_dataset(dataset_name, line)
-        df = self.datasets[dataset_key]['dataframe']
-        target_col = self._infer_target_column(df)
-        if not target_col:
-            raise AIRuntimeError(f"Could not infer target column for dataset '{dataset_name}'", line, 1)
-        X = df.drop(columns=[target_col])
-        y = df[target_col]
-        if X.empty:
-            raise AIRuntimeError(f"Dataset '{dataset_name}' has no feature columns", line, 1)
-        task = self.models[model_key]['task']
-        effective_task = 'regression' if task == 'regression' else 'classification'
-        pipeline = self._build_pipeline(X, effective_task)
+            # ENDWORKFLOW / ENDPIPELINE / closing root brace
+            if re.match(r'^(?:ENDWORKFLOW|ENDPIPELINE)$', line, re.I) or line == '}':
+                if self.workflow_name:
+                    self.output.append(f"Workflow Completed: {self.workflow_name}")
+                    self._log_audit("WORKFLOW_END", f"Workflow {self.workflow_name} finished successfully")
+                continue
+
+            # ON event
+            m_on = re.match(r"^ON\s+([A-Za-z0-9_.]+)", line, re.I)
+            if m_on:
+                event_name = m_on.group(1)
+                self.output.append(f"Event Triggered: ON {event_name}")
+                self._log_audit("EVENT_RECEIVED", f"Triggered on event: {event_name}")
+                continue
+
+            # EXTRACT <var> FROM <source>
+            m_ext = re.match(r"^EXTRACT\s+(\w+)\s+FROM\s+(\w+)$", line, re.I)
+            if m_ext:
+                var_name, src_name = m_ext.groups()
+                src_data = self.mock_events.get(src_name.lower(), self.mock_events.get('email', {}))
+                extracted_val = src_data.get(var_name.lower(), 75000 if var_name.lower() == 'amount' else 1)
+                self.variables[var_name.lower()] = extracted_val
+                self.output.append(f"Data Extracted: {var_name} = {extracted_val} (from '{src_name}')")
+                self._log_audit("DATA_EXTRACT", f"Extracted {var_name}={extracted_val} from {src_name}")
+                continue
+
+            # SET <var> = <expr>
+            m_set = re.match(r'^SET\s+(\w+)\s*=\s*(-?\d+)$', line, re.I)
+            if m_set:
+                var_name, val = m_set.groups()
+                self.variables[var_name.lower()] = int(val)
+                self.output.append(f"Variable Set: {var_name} = {val}")
+                self._log_audit("VARIABLE_SET", f"Set {var_name}={val}")
+                continue
+
+            # IF <condition> { ... } [ ELSE { ... } ]
+            m_if = re.match(r"^IF\s+(.+?)\s*\{?$", line, re.I)
+            if m_if:
+                condition_str = m_if.group(1).rstrip('{').strip()
+                then_lines, else_lines, new_i = self._parse_if_block(raw_lines, i)
+                i = new_i
+                cond_result = self._evaluate_condition(condition_str, line_idx)
+                self.output.append(f"Condition Evaluated: ({condition_str}) -> {'TRUE' if cond_result else 'FALSE'}")
+                if cond_result:
+                    self._execute_statements(then_lines)
+                elif else_lines:
+                    self._execute_statements(else_lines)
+                continue
+
+            # NOTIFY <target>
+            m_notif = re.match(r"^NOTIFY\s+([\w@.-]+|'[^']*')$", line, re.I)
+            if m_notif:
+                target = m_notif.group(1).strip("'")
+                notif_record = {
+                    'recipient': target,
+                    'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    'context': dict(self.variables),
+                }
+                self.notifications.append(notif_record)
+                self.output.append(f"Notification Sent: [Recipient: '{target}'] (Context: {self.variables})")
+                self._log_audit("NOTIFICATION_SENT", f"Alert sent to {target}")
+                continue
+
+            # SAVE <entity> TO <target>
+            m_save = re.match(r"^SAVE\s+(\w+)\s+TO\s+(\w+|'[^']+')$", line, re.I)
+            if m_save:
+                entity, dest = m_save.groups()
+                dest_table = dest.strip("'")
+                if dest_table not in self.database:
+                    self.database[dest_table] = []
+                record = {
+                    'id': f"{entity}_{len(self.database[dest_table]) + 1}",
+                    'entity': entity,
+                    'saved_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    'attributes': dict(self.variables),
+                }
+                self.database[dest_table].append(record)
+                self.output.append(f"Database Record Saved: '{entity}' stored into table '{dest_table}' (Total records: {len(self.database[dest_table])})")
+                self._log_audit("DB_SAVE", f"Saved {entity} to table {dest_table}")
+                continue
+
+            # LOG '<message>'
+            m_log = re.match(r"^LOG\s+'([^']*)'$", line, re.I)
+            if m_log:
+                msg = m_log.group(1)
+                self.output.append(f"Log: {msg}")
+                self._log_audit("LOG", msg)
+                continue
+
+    def _parse_if_block(self, lines: List[str], current_i: int) -> tuple[List[str], List[str], int]:
+        """Collect lines belonging to THEN and optional ELSE blocks."""
+        then_lines = []
+        else_lines = []
+        in_else = False
+        depth = 1
+
+        i = current_i
+        while i < len(lines):
+            raw = lines[i]
+            trimmed = raw.strip()
+            i += 1
+
+            if not trimmed:
+                continue
+
+            # Check for '} ELSE {' or '} ELSE'
+            if re.match(r'^\}\s*ELSE(?:\s*\{)?$', trimmed, re.I) and depth == 1:
+                in_else = True
+                continue
+
+            # Check for standalone 'ELSE {' or 'ELSE'
+            if re.match(r'^ELSE(?:\s*\{)?$', trimmed, re.I) and depth == 1:
+                in_else = True
+                continue
+
+            if '{' in trimmed:
+                depth += trimmed.count('{')
+            if '}' in trimmed:
+                depth -= trimmed.count('}')
+                if depth == 0:
+                    # Look ahead to see if next non-empty line is an ELSE
+                    next_is_else = False
+                    for peek_idx in range(i, len(lines)):
+                        peek_line = lines[peek_idx].strip()
+                        if not peek_line:
+                            continue
+                        if re.match(r'^ELSE(?:\s*\{)?$', peek_line, re.I):
+                            next_is_else = True
+                            i = peek_idx + 1
+                            in_else = True
+                            depth = 1
+                        break
+                    if not next_is_else:
+                        break
+                    continue
+
+            if in_else:
+                else_lines.append(raw)
+            else:
+                then_lines.append(raw)
+
+        return then_lines, else_lines, i
+
+    def _evaluate_condition(self, cond: str, line_idx: int) -> bool:
+        """Evaluate a relational comparison condition in the workflow variable scope."""
+        m_comp = re.match(r"^(\w+)\s*(>|<|>=|<=|==|!=)\s*(-?\d+|\w+)$", cond)
+        if not m_comp:
+            # Fallback simple truthiness
+            val = self.variables.get(cond.lower(), 1)
+            return bool(val)
+
+        lhs_var, op, rhs_val = m_comp.groups()
+        left = self.variables.get(lhs_var.lower(), 0)
         try:
-            pipeline.fit(X, y)
-        except Exception as exc:
-            raise AIRuntimeError(f"Training failed for model '{model_name}': {exc}", line, 1)
-        preds = pipeline.predict(X)
-        if effective_task == 'regression':
-            metric_name = 'r2'
-            metric_value = float(r2_score(y, preds))
-        else:
-            metric_name = 'accuracy'
-            metric_value = float(accuracy_score(y, preds))
-        info = self.models[model_key]
-        info.update({
-            'trained': True,
-            'pipeline': pipeline,
-            'dataset': dataset_key,
-            'metric_name': metric_name,
-            'metric_value': metric_value,
-            'epochs': epochs,
-            'target_col': target_col,
-            'feature_columns': list(X.columns),
+            right = int(rhs_val)
+        except ValueError:
+            right = self.variables.get(rhs_val.lower(), 0)
+
+        if op == '>':  return left > right
+        if op == '<':  return left < right
+        if op == '>=': return left >= right
+        if op == '<=': return left <= right
+        if op == '==': return left == right
+        if op == '!=': return left != right
+        return False
+
+    def _log_audit(self, action: str, details: str):
+        self.audit_logs.append({
+            'action': action,
+            'details': details,
+            'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
         })
-        self.output.append(f"Training Started: {model_name} on {dataset_name} for {epochs} epochs")
-        self.output.append(f"Training {metric_name.title()}: {metric_value:.4f}")
 
-    def _evaluate(self, model_name: str, line: int):
-        model_key = self._require_model(model_name, line)
-        info = self.models[model_key]
-        if not info.get('trained'):
-            raise AIRuntimeError(f"Model '{model_name}' has not been trained", line, 1)
-        self.output.append(f"Evaluation {info['metric_name'].title()}: {info['metric_value']:.4f}")
 
-    def _predict(self, model_name: str, row_index: int, out_var: str, line: int):
-        model_key = self._require_model(model_name, line)
-        info = self.models[model_key]
-        if not info.get('trained'):
-            raise AIRuntimeError(f"Model '{model_name}' has not been trained", line, 1)
-        dataset_info = self.datasets[info['dataset']]
-        df = dataset_info['dataframe']
-        target_col = info['target_col']
-        X = df.drop(columns=[target_col])
-        if row_index < 0 or row_index >= len(X):
-            raise AIRuntimeError(f"Prediction input row {row_index} is out of bounds for dataset '{info['dataset']}'", line, 1)
-        row = X.iloc[[row_index]]
-        try:
-            pred = info['pipeline'].predict(row)[0]
-        except Exception as exc:
-            raise AIRuntimeError(f"Prediction failed for model '{model_name}': {exc}", line, 1)
-        info['prediction'] = pred
-        info['prediction_var'] = out_var
-        self.output.append(f"Prediction [{out_var}] for row {row_index}: {pred}")
+# Backward compatibility alias
+BusinessWorkflowRuntime = AIWorkflowRuntime

@@ -33,24 +33,35 @@ class ListingGenerator:
 
     def add_all_lex_errors(self, errors):
         for err in errors:
-            self.add_message("LEX", "ERROR", err.line, err.col, err.message)
+            col = getattr(err, 'col', getattr(err, 'column', 0))
+            self.add_message("LEX", "ERROR", err.line, col, err.message)
 
     def add_all_parse_errors(self, errors):
         for err in errors:
-            self.add_message("PARSE", "ERROR", err.line, err.col, err.message)
+            col = getattr(err, 'col', getattr(err, 'column', 0))
+            self.add_message("PARSE", "ERROR", err.line, col, err.message)
 
-    def add_all_sem_errors(self, errors: List[str]):
+    def add_all_sem_errors(self, errors):
         for err in errors:
-            # Parse out line number from "[SEM ERROR] Line N: ..."
-            import re
-            m = re.match(r'\[SEM ERROR\]\s+Line\s+(\d+):\s+(.*)', err)
-            if m:
-                line = int(m.group(1))
-                msg  = m.group(2)
+            if hasattr(err, 'line') and hasattr(err, 'message'):
+                err_type = getattr(err, 'error_type', 'SEMANTIC')
+                self.add_message("SEM", f"ERROR ({err_type})", err.line, getattr(err, 'col', 0), err.message)
             else:
-                line = 0
-                msg  = err
-            self.add_message("SEM", "ERROR", line, 0, msg)
+                import re
+                m = re.match(r'\[SEMANTIC ERROR:\s*([^\]]+)\]\s+Line\s+(\d+):\s+(.*)', str(err))
+                if m:
+                    err_type = m.group(1)
+                    line = int(m.group(2))
+                    msg  = m.group(3)
+                    self.add_message("SEM", f"ERROR ({err_type})", line, 0, msg)
+                else:
+                    m2 = re.match(r'\[SEM ERROR\]\s+Line\s+(\d+):\s+(.*)', str(err))
+                    if m2:
+                        line = int(m2.group(1))
+                        msg  = m2.group(2)
+                        self.add_message("SEM", "ERROR", line, 0, msg)
+                    else:
+                        self.add_message("SEM", "ERROR", 0, 0, str(err))
 
     def generate(self, output_path: str = None) -> str:
         """Build the listing string, optionally write to file."""

@@ -3,89 +3,203 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Workflow DSL Compiler</title>
+  <title>Business Workflow DSL Compiler &amp; Agentic Debugger</title>
+  <meta name="description" content="Declarative Business Automation DSL Compiler with full pipeline: Lexer → Parser → AST → Semantic Analysis → CFG → IR → VM Execution. Includes Agentic Debugger with deterministic diagnostics." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <header class="hero">
-    <div>
-      <h1>AI Workflow DSL Compiler</h1>
-      <p>Industry-style AI pipeline DSL lowered into a full compiler pipeline with an agentic debugging layer</p>
+    <div class="hero-text">
+      <div class="hero-badge">🏗️ Compiler Design Project</div>
+      <h1>Business Workflow DSL Compiler</h1>
+      <p>Declarative Business Process Automation &bull; Lexer → Parser → AST → Semantic Analysis → CFG → IR → VM</p>
     </div>
     <div class="hero-actions">
-      <button id="loadSampleBtn">Load AI Sample</button>
-      <button id="loadRealBtn" class="secondary">Load Real Training Demo</button>
-      <button id="loadErrorBtn" class="secondary">Load AI Error Sample</button>
-      <button id="compileBtn" class="accent">Compile</button>
+      <button id="loadInvoiceBtn" class="sample-btn" title="Load Invoice Processing workflow">
+        <span class="btn-icon">📄</span> Invoice Processing
+      </button>
+      <button id="loadOrderBtn" class="sample-btn secondary" title="Load Order Approval workflow">
+        <span class="btn-icon">📦</span> Order Approval
+      </button>
+      <button id="loadFaultyBtn" class="sample-btn secondary danger-btn" title="Load workflow with intentional errors">
+        <span class="btn-icon">🐛</span> Faulty Workflow
+      </button>
+      <button id="compileBtn" class="accent pulse-btn">
+        <span class="btn-icon">⚡</span> Compile &amp; Execute
+      </button>
     </div>
   </header>
 
   <main class="layout">
+    <!-- Editor Panel -->
     <section class="editor-card">
-      <div class="section-head runtime-head"><div><h2>Source Editor</h2></div></div>
+      <!-- NL AI Assistant -->
+      <div class="nl-card">
+        <div class="nl-header">
+          <span class="sparkle">✨</span>
+          <strong>Natural Language AI Assistant</strong>
+          <span class="subtext">Describe a workflow in plain English to generate validated DSL:</span>
+        </div>
+        <div class="nl-input-row">
+          <input id="nlPrompt" placeholder="e.g. When an invoice arrives, extract the amount and notify finance if above 50000, then save to database." />
+          <button id="nlGenerateBtn" class="nl-btn">Convert to DSL</button>
+        </div>
+      </div>
+
+      <!-- Source Editor -->
       <div class="section-head">
-        <h2>Compiler Input</h2>
+        <h2>📝 Workflow Source Code (DSL)</h2>
         <label>
-          Program name
-          <input id="programName" value="web_input" />
+          Workflow Name
+          <input id="programName" value="InvoiceProcessing" />
         </label>
       </div>
-      <textarea id="sourceEditor" spellcheck="false"></textarea>
-      <div class="section-head">
-        <h2>Runtime input</h2>
-        <label>
-          Optional numbers for read(...) or prediction demos
-          <input id="runtimeInput" placeholder="Example: 5 10 15" />
-        </label>
-      </div>
+      <textarea id="sourceEditor" spellcheck="false" placeholder="Write or generate a Business Workflow DSL program..."></textarea>
+
+      <!-- Agentic Debugger Controls -->
       <div class="section-head agent-controls">
-        <h2>Agent mode</h2>
-        <label>
-          Backend
-          <select id="agentBackend">
-            <option value="deterministic">Deterministic agent</option>
-            <option value="llm">Deterministic + optional LLM</option>
-            <option value="langgraph">LangGraph orchestration</option>
-            <option value="langgraph-llm">LangGraph + optional LLM</option>
-            <option value="auto">Auto best available</option>
-          </select>
-        </label>
-        <label>
-          LLM provider
-          <select id="llmProvider">
-            <option value="">None / env default</option>
-            <option value="openai">OpenAI</option>
-            <option value="gemini">Gemini</option>
-          </select>
-        </label>
-        <label>
-          Model
-          <input id="llmModel" placeholder="Optional, e.g. gpt-4o-mini" />
-        </label>
+        <h2>🤖 Agentic Debugger Mode</h2>
+        <div class="controls-row">
+          <label>
+            Execution Mode
+            <select id="agentBackend">
+              <option value="deterministic">Deterministic Agent (Default — no API key)</option>
+              <option value="llm">Deterministic + Optional LLM Review</option>
+              <option value="langgraph">LangGraph Orchestration</option>
+              <option value="langgraph-llm">LangGraph + Optional LLM</option>
+              <option value="auto">Auto Best Available</option>
+            </select>
+          </label>
+          <label>
+            Optional LLM Provider
+            <select id="llmProvider">
+              <option value="">None / Gated</option>
+              <option value="openai">OpenAI</option>
+              <option value="gemini">Google Gemini</option>
+            </select>
+          </label>
+          <label>
+            Model
+            <input id="llmModel" placeholder="Optional, e.g. gpt-4o-mini" />
+          </label>
+        </div>
       </div>
-      <div id="statusBar" class="status">Ready.</div>
+      <div id="statusBar" class="status">
+        <span class="status-dot idle"></span> Ready — load a sample or write your own workflow.
+      </div>
     </section>
 
+    <!-- Metrics Grid -->
     <section class="summary-grid">
-      <article class="metric"><span id="successValue">—</span><label>Build status</label></article>
-      <article class="metric"><span id="tokenCount">0</span><label>Tokens</label></article>
-      <article class="metric"><span id="errorCount">0</span><label>Total errors</label></article>
-      <article class="metric"><span id="tacCount">0</span><label>TAC lines</label></article>
+      <article class="metric">
+        <span id="successValue" class="metric-val">—</span>
+        <label>Compiler Status</label>
+      </article>
+      <article class="metric">
+        <span id="tokenCount" class="metric-val">0</span>
+        <label>Lexer Tokens</label>
+      </article>
+      <article class="metric">
+        <span id="errorCount" class="metric-val">0</span>
+        <label>Total Errors</label>
+      </article>
+      <article class="metric">
+        <span id="tacCount" class="metric-val">0</span>
+        <label>IR Quadruples</label>
+      </article>
+      <article class="metric">
+        <span id="vmStatusValue" class="metric-val">—</span>
+        <label>VM Status</label>
+      </article>
+      <article class="metric">
+        <span id="vmTimeValue" class="metric-val">0s</span>
+        <label>Simulated Time</label>
+      </article>
+      <article class="metric">
+        <span id="traceStepCount" class="metric-val">0</span>
+        <label>VM Trace Steps</label>
+      </article>
+      <article class="metric">
+        <span id="serviceCallCount" class="metric-val">0</span>
+        <label>Service Calls</label>
+      </article>
     </section>
 
+    <!-- AI Assistant Card -->
+    <section class="ai-assistant-card">
+      <div class="ai-header">
+        <span class="ai-icon">🧠</span>
+        <strong>AI Assistant</strong>
+        <span class="ai-subtext">Powered by MockAIProvider (offline) · AI never executes workflows · All DSL goes through the compiler</span>
+      </div>
+      <div class="ai-actions">
+        <button id="aiExplainErrorBtn" class="ai-action-btn" disabled title="Compile first to enable">
+          <span>🔍</span> Explain Error
+        </button>
+        <button id="aiExplainWorkflowBtn" class="ai-action-btn">
+          <span>📖</span> Explain Workflow
+        </button>
+        <button id="aiExplainTraceBtn" class="ai-action-btn" disabled title="Compile first to enable">
+          <span>🔬</span> Explain Trace
+        </button>
+      </div>
+      <div id="aiOutput" class="ai-output" style="display:none">
+        <div class="ai-output-header">
+          <span id="aiOutputTitle">AI Assistant Output</span>
+          <button id="aiOutputClose" class="ai-close-btn">✕</button>
+        </div>
+        <pre id="aiOutputContent" class="ai-output-content"></pre>
+        <div id="aiSuggestedDslWrap" class="ai-suggested-dsl" style="display:none">
+          <div class="ai-suggested-label">💡 Suggested DSL Fix (must be re-compiled to validate):</div>
+          <pre id="aiSuggestedDsl" class="ai-suggested-content"></pre>
+          <button id="aiApplySuggestedBtn" class="ai-apply-btn">Apply to Editor &amp; Re-compile</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Output Tabs -->
     <section class="tabs-card">
       <div class="tabs" id="tabs"></div>
+
+      <!-- All panels -->
       <pre class="panel active" data-panel="output" id="outputPanel"></pre>
-      <pre class="panel" data-panel="listing" id="listingPanel"></pre>
-      <pre class="panel" data-panel="tokens" id="tokensPanel"></pre>
-      <pre class="panel" data-panel="ast" id="astPanel"></pre>
-      <pre class="panel" data-panel="tac" id="tacPanel"></pre>
-      <pre class="panel" data-panel="asm" id="asmPanel"></pre>
-      <pre class="panel" data-panel="errors" id="errorsPanel"></pre>
-      <pre class="panel" data-panel="translated" id="translatedPanel"></pre>
+      <pre class="panel" data-panel="vm_trace" id="vmTracePanel"></pre>
+      <pre class="panel" data-panel="cfg" id="cfgPanel"></pre>
+      <pre class="panel" data-panel="services" id="servicesPanel"></pre>
       <pre class="panel" data-panel="agent" id="agentPanel"></pre>
+      <pre class="panel" data-panel="errors" id="errorsPanel"></pre>
+      <pre class="panel" data-panel="tac" id="tacPanel"></pre>
+      <pre class="panel" data-panel="ast" id="astPanel"></pre>
+      <pre class="panel" data-panel="tokens" id="tokensPanel"></pre>
+      <pre class="panel" data-panel="listing" id="listingPanel"></pre>
+      <pre class="panel" data-panel="asm" id="asmPanel"></pre>
+      <pre class="panel" data-panel="translated" id="translatedPanel"></pre>
     </section>
   </main>
+
+  <!-- Pipeline visualization footer -->
+  <footer class="pipeline-footer">
+    <div class="pipeline-steps">
+      <span class="pipe-step" id="pipe-lexer">Lexer</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step" id="pipe-parser">Parser</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step" id="pipe-ast">AST</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step" id="pipe-semantic">Semantic</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step" id="pipe-cfg">CFG</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step" id="pipe-ir">IR / TAC</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step" id="pipe-vm">VM</span>
+      <span class="pipe-arrow">→</span>
+      <span class="pipe-step" id="pipe-services">Services</span>
+    </div>
+  </footer>
 
   <script src="/app.js"></script>
 </body>

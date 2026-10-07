@@ -144,7 +144,7 @@ class Interpreter:
         except RuntimeExecutionError:
             self._runtime_error(f"Undeclared identifier '{var.name}'", var)
         if var.index is None:
-            cell.value = int(value) if not isinstance(value, dict) else value
+            cell.value = value if isinstance(value, (dict, str)) else int(value)
             return
         arr = cell.value
         if not isinstance(arr, dict) or 'data' not in arr:
@@ -192,7 +192,14 @@ class Interpreter:
 
     def _apply_binary(self, node: BinaryExpr, left: Any, right: Any):
         op = node.op
-        l, r = int(left), int(right)
+        if op == '=':
+            return 1 if left == right or str(left) == str(right) else 0
+        if op == '<>':
+            return 1 if left != right and str(left) != str(right) else 0
+        try:
+            l, r = int(left), int(right)
+        except (ValueError, TypeError):
+            l, r = left, right
         if op == '+':
             return l + r
         if op == '-':

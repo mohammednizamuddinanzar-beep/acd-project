@@ -31,8 +31,9 @@ from interpreter import Interpreter, RuntimeExecutionError  # noqa: E402
 from ai_runtime import AIWorkflowRuntime, AIRuntimeError  # noqa: E402
 from agent_orchestrator import build_agent_report  # noqa: E402
 
-SAMPLE_PATH = ROOT / 'tests' / 'ai_sample.aidl'
-ERROR_PATH = ROOT / 'tests' / 'ai_error.aidl'
+SAMPLE_PATH = ROOT / 'examples' / 'invoice_workflow.bdsl'
+ORDER_SAMPLE_PATH = ROOT / 'examples' / 'order_fulfillment.bdsl'
+ERROR_PATH = ROOT / 'examples' / 'faulty_workflow.bdsl'
 LEGACY_SAMPLE_PATH = ROOT / 'tests' / 'sample.pas'
 REAL_TRAINING_SAMPLE_PATH = ROOT / 'examples' / 'real_training.aidl'
 
@@ -98,18 +99,48 @@ def compile_payload(source_code: str, program_name: str = 'web_input', runtime_i
                 llm_model=llm_model,
                 status_message='Unexpected compiler server failure. The agent report was generated from the captured exception.',
             )
+        # Generate Control Flow Graph (CFG) — always available for visualization
+        from cfg import ControlFlowGraph
+        from workflow_vm import WorkflowVM
+        from icg import TACInstr
+
+        cfg = ControlFlowGraph(program_name)
+        cfg.build_from_source(source_code)
+        cfg_dot = cfg.to_dot()
+
+        # ── EXECUTION GATE ────────────────────────────────────────────────────────
+        # The VM only executes if ALL compiler phases succeeded (success=True).
+        # Semantic/lex/parse errors block execution. This enforces the pipeline:
+        #   SOURCE → LEXER → PARSER → SEMANTIC → IR → VM
+        # Invalid programs must NOT reach the VM.
+        # ─────────────────────────────────────────────────────────────────────────
+        execution_allowed = results.get('success', False)
+        vm_results = {'status': 'NOT_STARTED', 'simulated_time': 0.0, 'environment': {},
+                      'trace': [], 'activity_summary': {}, 'errors': []}
+
+        if execution_allowed:
+            vm = WorkflowVM()
+            tac_list = results.get('tac', [])
+            if tac_list:
+                vm.load_ir(tac_list)
+                vm_results = vm.execute()
+            # If no TAC (business workflow DSL runtime path), leave VM as NOT_STARTED
+            # since the ai_runtime already handled execution above.
+
         asm_text = '\n'.join(str(line) for line in results['asm']) if results['asm'] else ''
-        runtime_output = ''
+        runtime_output = results.get('runtime_output', '')
         runtime_error = None
-        runtime_warnings = []
-        if results['success']:
+        runtime_warnings = results.get('runtime_warnings', []) or []
+        if execution_allowed and not runtime_output:
             try:
                 if results.get('source_language') == 'ai_workflow_dsl':
                     runtime = AIWorkflowRuntime(source_code, base_dir=str(ROOT)).execute()
-                else:
+                    runtime_output = runtime['output']
+                    runtime_warnings = runtime.get('warnings', [])
+                elif results.get('ast'):
                     runtime = Interpreter(inputs=runtime_inputs or []).run(results['ast'])
-                runtime_output = runtime['output']
-                runtime_warnings = runtime.get('warnings', [])
+                    runtime_output = runtime['output']
+                    runtime_warnings = runtime.get('warnings', [])
             except AIRuntimeError as exc:
                 runtime_error = {
                     'message': str(exc),
@@ -136,6 +167,7 @@ def compile_payload(source_code: str, program_name: str = 'web_input', runtime_i
 
         return {
             'success': results['success'],
+            'execution_allowed': execution_allowed,
             'tokens': [
                 {
                     'type': tok.type.name,
@@ -158,12 +190,18 @@ def compile_payload(source_code: str, program_name: str = 'web_input', runtime_i
                 for e in results['sem_errors']
             ],
             'ast': ast_to_string(results['ast']),
+            'cfg_dot': cfg_dot,
             'tac': [str(instr) for instr in results['tac']],
             'asm': asm_text,
             'listing': results['listing'],
             'runtime_output': runtime_output,
             'runtime_error': runtime_error,
             'runtime_warnings': runtime_warnings,
+            'vm_status': vm_results.get('status', 'NOT_STARTED'),
+            'vm_simulated_time': vm_results.get('simulated_time', 0.0),
+            'vm_environment': vm_results.get('environment', {}),
+            'vm_trace': vm_results.get('trace', []),
+            'mock_services': vm_results.get('activity_summary', {}),
             'source_language': results.get('source_language', 'pascal_like_core_dsl'),
             'translated_source': results.get('translated_source', source_code),
             'agent_report': agent_report.to_dict(),
@@ -174,11 +212,7 @@ def compile_payload(source_code: str, program_name: str = 'web_input', runtime_i
 def build_error_response(source_code: str, message: str, line=None, column=None, line_text=None,
                          agent_backend='deterministic', llm_provider=None, llm_model=None,
                          status_message='Compilation failed before full compiler output was produced.'):
-    """Return a normal Web IDE payload plus an AI Agent Report for failure paths.
-
-    This keeps the web response shape stable even when AI DSL preprocessing,
-    parsing, or unexpected runtime setup fails before compile_payload can finish.
-    """
+    """Return a normal Web IDE payload plus an AI Agent Report for failure paths."""
     compile_results = {
         'success': False,
         'tokens': [],
@@ -196,7 +230,7 @@ def build_error_response(source_code: str, message: str, line=None, column=None,
         'asm': [],
         'listing': '',
         'ast': None,
-        'source_language': 'ai_workflow_dsl' if source_code.strip().upper().startswith(('PIPELINE', 'DATASET', 'MODEL', 'SET', 'TRAIN', 'EVALUATE', 'PREDICT', 'DEPLOY', 'MONITOR', 'LOG', 'ENDPIPELINE')) else 'pascal_like_core_dsl',
+        'source_language': 'business_workflow_dsl',
         'translated_source': '',
         'original_source': source_code,
         'runtime_warnings': [],
@@ -212,6 +246,7 @@ def build_error_response(source_code: str, message: str, line=None, column=None,
     )
     return {
         'success': False,
+        'execution_allowed': False,
         'tokens': [],
         'lex_errors': [],
         'parse_errors': [{
@@ -223,12 +258,18 @@ def build_error_response(source_code: str, message: str, line=None, column=None,
         }],
         'semantic_errors': [],
         'ast': '',
+        'cfg_dot': '',
         'tac': [],
         'asm': '',
         'listing': status_message,
         'runtime_output': '',
         'runtime_error': {'message': message, 'line': line, 'column': column, 'line_text': line_text},
         'runtime_warnings': [],
+        'vm_status': 'NOT_STARTED',
+        'vm_simulated_time': 0.0,
+        'vm_environment': {},
+        'vm_trace': [],
+        'mock_services': {},
         'source_language': compile_results['source_language'],
         'translated_source': '',
         'agent_report': agent_report.to_dict(),
@@ -255,24 +296,110 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path in ('/healthz', '/_ah/health'):
-            return self._send_json({'status': 'ok', 'service': 'ai-workflow-compiler-agent'})
+            return self._send_json({'status': 'ok', 'service': 'business-workflow-compiler-agent'})
         if self.path in ('/', '/index.html'):
             return self._send_file(STATIC_DIR / 'index.html')
         if self.path == '/styles.css':
             return self._send_file(STATIC_DIR / 'styles.css', 'text/css; charset=utf-8')
         if self.path == '/app.js':
             return self._send_file(STATIC_DIR / 'app.js', 'application/javascript; charset=utf-8')
-        if self.path == '/api/sample':
-            return self._send_json({'source': SAMPLE_PATH.read_text(encoding='utf-8')})
+        if self.path in ('/api/sample', '/api/invoice-sample'):
+            inv_path = ROOT / 'examples' / 'invoice_processing.workflow'
+            return self._send_json({'source': inv_path.read_text(encoding='utf-8') if inv_path.exists() else SAMPLE_PATH.read_text(encoding='utf-8')})
+        if self.path in ('/api/order-sample', '/api/order-processing-sample'):
+            ord_path = ROOT / 'examples' / 'order_processing.workflow'
+            return self._send_json({'source': ord_path.read_text(encoding='utf-8') if ord_path.exists() else ORDER_SAMPLE_PATH.read_text(encoding='utf-8')})
+        if self.path in ('/api/customer-sample', '/api/customer-support-sample'):
+            cust_path = ROOT / 'examples' / 'customer_support.workflow'
+            return self._send_json({'source': cust_path.read_text(encoding='utf-8')})
         if self.path == '/api/error-sample':
             return self._send_json({'source': ERROR_PATH.read_text(encoding='utf-8')})
-        if self.path == '/api/legacy-sample':
-            return self._send_json({'source': LEGACY_SAMPLE_PATH.read_text(encoding='utf-8')})
-        if self.path == '/api/real-training-sample':
-            return self._send_json({'source': REAL_TRAINING_SAMPLE_PATH.read_text(encoding='utf-8')})
         return self._send_json({'error': 'Not found'}, status=404)
 
+
     def do_POST(self):
+        if self.path == '/api/nl-to-dsl':
+            length = int(self.headers.get('Content-Length', '0'))
+            raw = self.rfile.read(length)
+            try:
+                payload = json.loads(raw.decode('utf-8') or '{}')
+            except json.JSONDecodeError:
+                return self._send_json({'error': 'Invalid JSON'}, status=400)
+            prompt = payload.get('prompt', '')
+            provider = payload.get('llm_provider')
+            model = payload.get('llm_model')
+            from nl_to_dsl import nl_to_dsl
+            conv = nl_to_dsl(prompt, provider=provider, model=model, verbose=False)
+            return self._send_json({
+                'dsl': conv.dsl,
+                'workflow_name': conv.workflow_name,
+                'method': conv.method,
+                'provider': conv.provider,
+                'confidence': conv.confidence,
+                'notes': conv.notes,
+            })
+
+        if self.path == '/api/ai-assist':
+            length = int(self.headers.get('Content-Length', '0'))
+            raw = self.rfile.read(length)
+            try:
+                payload = json.loads(raw.decode('utf-8') or '{}')
+            except json.JSONDecodeError:
+                return self._send_json({'error': 'Invalid JSON'}, status=400)
+            from ai_assistant import get_ai_assistant
+            action   = payload.get('action', '')
+            source   = payload.get('source', '')
+            provider = payload.get('llm_provider')
+            model    = payload.get('llm_model')
+            assistant = get_ai_assistant(provider=provider, model=model)
+            try:
+                if action == 'explain_error':
+                    result = assistant.explain_error(
+                        source=source,
+                        error_type=payload.get('error_type', 'UNKNOWN'),
+                        error_message=payload.get('error_message', ''),
+                        error_line=payload.get('error_line'),
+                    )
+                    return self._send_json({
+                        'action': action,
+                        'provider': result.provider,
+                        'text': result.to_text(),
+                        'what_it_means': result.what_it_means,
+                        'likely_cause': result.likely_cause,
+                        'suggested_fix': result.suggested_fix,
+                        'suggested_dsl': result.suggested_dsl,
+                        'confidence': result.confidence,
+                    })
+                elif action == 'explain_workflow':
+                    result = assistant.explain_workflow(source)
+                    return self._send_json({
+                        'action': action,
+                        'provider': result.provider,
+                        'text': result.to_text(),
+                        'workflow_name': result.workflow_name,
+                        'trigger_event': result.trigger_event,
+                        'summary': result.summary,
+                    })
+                elif action == 'explain_trace':
+                    result = assistant.explain_trace(
+                        source=source,
+                        tac=payload.get('tac', []),
+                        trace=payload.get('trace', []),
+                        environment=payload.get('environment', {}),
+                    )
+                    return self._send_json({
+                        'action': action,
+                        'provider': result.provider,
+                        'text': result.to_text(),
+                        'total_steps': result.total_steps,
+                        'explanation': result.explanation,
+                    })
+                else:
+                    return self._send_json({'error': f'Unknown action: {action}'}, status=400)
+            except Exception as exc:
+                return self._send_json({'error': str(exc)}, status=500)
+
+
         if self.path != '/api/compile':
             return self._send_json({'error': 'Not found'}, status=404)
         length = int(self.headers.get('Content-Length', '0'))
